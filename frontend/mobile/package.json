@@ -1,0 +1,28 @@
+{
+  "name": "redacTLDR-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start -c",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "eject": "expo eject"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~3.2.3",
+    "@tanstack/react-query": "^5.59.0",
+    "expo": "~51.0.0",
+    "expo-status-bar": "~1.12.1",
+    "react": "~18.2.0",
+    "react-dom": "18.2.0",
+    "react-native": "~0.74.0",
+    "react-native-web": "~0.19.10",
+    "zustand": "^4.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.3",
+    "@types/react": "~18.2.0"
+  }
+}

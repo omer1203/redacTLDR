@@ -1,0 +1,98 @@
+# OS/editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.build/
+dist/
+venv/
+.env
+.env.*.local
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Node / Expo
+node_modules/
+.expo/
+.expo-shared/
+dist/
+build/
+# Consider committing a lockfile; if you choose to, remove the next two lines:
+package-lock.json
+yarn.lock
+
+# Mobile native (if you later eject)
+ios/Pods/
+ios/build/
+xcuserdata/
+*.xccheckout
+*.xcworkspace
+android/.gradle/
+android/app/build/
+android/build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+web-build/
+npm-debug.*
+.npm-cache/
+
+# Terraform (later)
+*.tfstate
+*.tfstate.*
+.crash
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.auto.tfvars
+*.auto.tfvars.json
+
+# Docker / envs
+**/.env
+**/.env.*
+**/*.log
+
+# Additional caches
+*.cache
+.cache/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+*.so
+.Python
+
+# IDE
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# Temporary files
+*.tmp
+*.temp
+*~

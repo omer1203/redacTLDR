@@ -1,0 +1,9 @@
+{ 
+    "expo": {
+        "name": "RedacTLDR",
+        "slug": "redacTLDR", 
+        "scheme": "redacTLDR", 
+        "sdkVersion": "51.0.0",
+        "platforms": ["ios", "android", "web"]
+    }
+}
