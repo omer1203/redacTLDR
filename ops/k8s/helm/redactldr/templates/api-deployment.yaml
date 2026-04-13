@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redactldr-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redactldr-api
+  template:
+    metadata:
+      labels:
+        app: redactldr-api
+    spec:
+      containers:
+        - name: api
+          image: {{ .Values.image.api }}
+          ports:
+            - containerPort: {{ .Values.service.apiPort }}
+          env:
+            - name: AWS_REGION
+              value: {{ .Values.env.AWS_REGION | quote }}
+            - name: CELERY_BROKER_URL
+              value: {{ .Values.env.CELERY_BROKER_URL | quote }}
+            - name: CELERY_BACKEND_URL
+              value: {{ .Values.env.CELERY_BACKEND_URL | quote }}

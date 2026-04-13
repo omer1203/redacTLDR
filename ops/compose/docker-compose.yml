@@ -1,31 +1,96 @@
-version: '3.9'
+services:
+  web:
+    image: node:22-alpine
+    container_name: redactldr-web
+    working_dir: /workspace
+    command: sh -c "npm run dev --workspace @redactldr/web"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
 
-services: 
-  api: 
+  api:
     build:
       context: ../../
       dockerfile: ops/docker/api.Dockerfile
-    container_name: redacTLDR-api
+    container_name: redactldr-api
     environment:
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_BACKEND_URL: redis://redis:6379/1
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/redactldr}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_BACKEND_URL: ${CELERY_BACKEND_URL:-redis://redis:6379/1}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      S3_BUCKET_ORIGINALS: ${S3_BUCKET_ORIGINALS:-redactldr-originals-dev}
+      S3_BUCKET_DOWNLOADS: ${S3_BUCKET_DOWNLOADS:-redactldr-downloads-dev}
+      CLERK_ISSUER_URL: ${CLERK_ISSUER_URL:-}
+      CLERK_JWKS_URL: ${CLERK_JWKS_URL:-}
+      CLERK_AUDIENCE: ${CLERK_AUDIENCE:-redactldr-api}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      OTEL_SERVICE_NAME: redactldr-api
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     ports:
-      - 8000:8000
+      - "8000:8000"
     depends_on:
+      - postgres
       - redis
+      - otel-collector
+
   worker:
     build:
       context: ../../
       dockerfile: ops/docker/worker.Dockerfile
-    container_name: redacTLDR-worker
+    container_name: redactldr-worker
     environment:
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_BACKEND_URL: redis://redis:6379/1
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/redactldr}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_BACKEND_URL: ${CELERY_BACKEND_URL:-redis://redis:6379/1}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      S3_BUCKET_ORIGINALS: ${S3_BUCKET_ORIGINALS:-redactldr-originals-dev}
+      S3_BUCKET_DOWNLOADS: ${S3_BUCKET_DOWNLOADS:-redactldr-downloads-dev}
+      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-anthropic.claude-3-haiku-20240307-v1:0}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      OTEL_SERVICE_NAME: redactldr-worker
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     depends_on:
+      - postgres
       - redis
+      - otel-collector
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: redactldr-postgres
+    environment:
+      POSTGRES_DB: redactldr
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   redis:
     image: redis:7-alpine
-    container_name: redacTLDR-redis
+    container_name: redactldr-redis
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.117.0
+    container_name: redactldr-otel-collector
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
     ports:
-      - 6379:6379
-    
+      - "4317:4317"
+      - "4318:4318"
+
+volumes:
+  postgres_data:

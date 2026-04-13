@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redactldr-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redactldr-worker
+  template:
+    metadata:
+      labels:
+        app: redactldr-worker
+    spec:
+      containers:
+        - name: worker
+          image: {{ .Values.image.worker }}
+          env:
+            - name: AWS_REGION
+              value: {{ .Values.env.AWS_REGION | quote }}
+            - name: CELERY_BROKER_URL
+              value: {{ .Values.env.CELERY_BROKER_URL | quote }}
+            - name: CELERY_BACKEND_URL
+              value: {{ .Values.env.CELERY_BACKEND_URL | quote }}

@@ -1,0 +1,13 @@
+image:
+  api: redactldr-api:latest
+  worker: redactldr-worker:latest
+  web: redactldr-web:latest
+
+env:
+  AWS_REGION: us-east-1
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_BACKEND_URL: redis://redis:6379/1
+
+service:
+  apiPort: 8000
+  webPort: 3000

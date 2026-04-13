@@ -5,6 +5,7 @@
 **/.mypy_cache
 **/.pytest_cache
 **/node_modules
+**/.next
 **/.expo
 **/dist
 **/build
