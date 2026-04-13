@@ -13,9 +13,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 #copy the rest of the application code into the container
 COPY . .
 
+# keep repo root importable for package-qualified imports
+ENV PYTHONPATH=/app
+
 #expose the port 8000
 EXPOSE 8000
 
 #run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "services.api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 

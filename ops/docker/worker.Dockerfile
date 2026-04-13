@@ -11,7 +11,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+ENV PYTHONPATH=/app
+
 EXPOSE 8000
 
-#celery worker command to run the worker, pointing to the cerlery app object and -Q default to run the default queue restricts the worker to that queue
-CMD ["celery", "-A", "workers.celery_app.celery", "worker", "-Q", "default", "--loglevel=INFO"]
+# -A points at the celery app instance; -Q default restricts to the default queue
+CMD ["celery", "-A", "services.worker.app.celery_app.celery", "worker", "-Q", "default", "--loglevel=INFO"]

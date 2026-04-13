@@ -4,6 +4,7 @@ Thumbs.db
 *.swp
 .idea/
 .vscode/
+.cursor/
 
 # Logs
 *.log
@@ -26,13 +27,12 @@ htmlcov/
 
 # Node / Expo
 node_modules/
+.next/
 .expo/
 .expo-shared/
+*.tsbuildinfo
 dist/
 build/
-# Consider committing a lockfile; if you choose to, remove the next two lines:
-package-lock.json
-yarn.lock
 
 # Mobile native (if you later eject)
 ios/Pods/
@@ -66,6 +66,10 @@ terraform.tfvars
 **/.env
 **/.env.*
 **/*.log
+ops/compose/*.schema.json
+
+# Local process tracking
+docs/PROCESS_TRACKER.local.md
 
 # Additional caches
 *.cache
