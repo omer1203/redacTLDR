@@ -1,0 +1,14 @@
+{
+  "name": "redactldr",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "web:dev": "npm run dev --workspace @redactldr/web",
+    "web:build": "npm run build --workspace @redactldr/web",
+    "web:lint": "npm run lint --workspace @redactldr/web",
+    "web:typecheck": "npm run typecheck --workspace @redactldr/web"
+  }
+}
