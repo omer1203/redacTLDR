@@ -5,14 +5,18 @@ on:
   push:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   sbom-and-scan:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build API image
         run: docker build -f ops/docker/api.Dockerfile -t redactldr-api:scan .
@@ -51,12 +55,12 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Upload API scan result
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-api.sarif
 
       - name: Upload worker scan result
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-worker.sarif
 
@@ -68,7 +72,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3.8.1
       - name: Example signing step
