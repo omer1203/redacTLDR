@@ -35,7 +35,7 @@ jobs:
           output-file: sbom-worker.spdx.json
 
       - name: Scan API image (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           image-ref: redactldr-api:scan
           format: sarif
@@ -43,7 +43,7 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Scan worker image (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           image-ref: redactldr-worker:scan
           format: sarif
