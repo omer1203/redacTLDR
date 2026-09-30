@@ -1,3 +1,10 @@
+"""
+PDF redaction utility primitives used by worker export jobs.
+
+Current implementation validates geometry and rewrites PDFs through pikepdf.
+It does not yet apply true redact annotations to page content streams.
+"""
+
 from collections.abc import Sequence
 from io import BytesIO
 
@@ -5,8 +12,15 @@ import pikepdf
 
 
 def clamp_bbox(bbox: dict[str, float]) -> dict[str, float]:
+    """
+    Normalize user/model-provided normalized bounding boxes into safe ranges.
+
+    Input/output coordinates are expected in [0, 1] relative page space.
+    """
+    # Clamp origin to page bounds.
     x = max(0.0, min(1.0, float(bbox.get("x", 0.0))))
     y = max(0.0, min(1.0, float(bbox.get("y", 0.0))))
+    # Clamp dimensions so the box cannot extend past page boundaries.
     width = max(0.0, min(1.0 - x, float(bbox.get("width", 0.0))))
     height = max(0.0, min(1.0 - y, float(bbox.get("height", 0.0))))
     return {"x": x, "y": y, "width": width, "height": height}
@@ -20,6 +34,7 @@ def redact_pdf_bytes(pdf_bytes: bytes, boxes: Sequence[dict[str, float]]) -> byt
     The exact redact annotation application can be layered on top once
     page-space conversion and reviewed box inputs are fully wired.
     """
+    # Validate every box upfront (even though output is not applied yet).
     for box in boxes:
         clamp_bbox(box)
 

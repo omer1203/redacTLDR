@@ -14,10 +14,11 @@ class UserPrincipal(BaseModel):
 
 
 class CreateDocumentRequest(BaseModel):
-    filename: str
-    contentType: str = "application/pdf"
+    filename: str = Field(min_length=1, max_length=512)
+    contentType: str = Field(default="application/pdf", min_length=1, max_length=128)
     mode: DocumentMode
     safeMode: bool = True
+    sizeBytes: int | None = Field(default=None, ge=1)
 
 
 class CreateDocumentResponse(BaseModel):
@@ -25,6 +26,17 @@ class CreateDocumentResponse(BaseModel):
     s3Key: str
     presignedPutUrl: str
     status: DocumentStatus
+
+
+class JobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    job_type: str = Field(alias="jobType")
+    status: str
+    attempt_count: int = Field(alias="attemptCount")
+    last_error: str | None = Field(default=None, alias="lastError")
+    started_at: datetime | None = Field(default=None, alias="startedAt")
+    finished_at: datetime | None = Field(default=None, alias="finishedAt")
 
 
 class DocumentOut(BaseModel):
