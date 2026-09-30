@@ -9,3 +9,12 @@ variable "environment" {
   type        = string
   default     = "staging"
 }
+
+variable "s3_browser_allowed_origins" {
+  description = "Browser origins allowed for presigned S3 PUT/GET (bucket CORS). Include every frontend URL users upload or download from."
+  type        = list(string)
+  default = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ]
+}

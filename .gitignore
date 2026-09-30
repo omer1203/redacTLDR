@@ -18,6 +18,7 @@ __pycache__/
 .build/
 dist/
 venv/
+.venv/
 .env
 .env.*.local
 .pytest_cache/
@@ -62,9 +63,13 @@ terraform.tfvars
 *.auto.tfvars
 *.auto.tfvars.json
 
+# Local sample documents (fake PII fixtures)
+samples/
+
 # Docker / envs
 **/.env
 **/.env.*
+!**/.env.example
 **/*.log
 ops/compose/*.schema.json
 

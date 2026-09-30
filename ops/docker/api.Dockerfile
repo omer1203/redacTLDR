@@ -1,24 +1,23 @@
-#use the python 3.11 slim image
+# API container image for FastAPI runtime.
+# Uses slim base to keep build size reasonable.
 FROM python:3.11-slim
 
-#set up the working directory for all the commands to run inside the container
+# All paths below are relative to repository root copied into /app.
 WORKDIR /app
 
-#copy the requirements.txt file into the container
-COPY requirements.txt .
+# Install API runtime dependencies first to leverage Docker layer caching.
+COPY requirements-api.txt .
 
-#install the dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements-api.txt
 
-#copy the rest of the application code into the container
+# Copy monorepo sources (API imports from package-qualified paths).
 COPY . .
 
 # keep repo root importable for package-qualified imports
 ENV PYTHONPATH=/app
 
-#expose the port 8000
+# FastAPI/uvicorn listens on 8000 in this image.
 EXPOSE 8000
 
-#run the application
+# Start API server.
 CMD ["uvicorn", "services.api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-

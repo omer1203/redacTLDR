@@ -1,28 +1,36 @@
 services:
+  # Next.js web app for local development.
   web:
     image: node:22-alpine
     container_name: redactldr-web
     working_dir: /workspace
+    # Monorepo workspace command; runs dev server with hot reload.
     command: sh -c "npm run dev --workspace @redactldr/web"
     volumes:
+      # Mount whole repo so edits reflect immediately inside container.
       - ../../:/workspace
     environment:
+      # Web runtime points at API container via host-exposed port.
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
+      CLERK_JWT_TEMPLATE: ${CLERK_JWT_TEMPLATE:-redactldr-api}
     ports:
       - "3000:3000"
     depends_on:
       - api
 
+  # FastAPI service: auth, document orchestration, DB writes.
   api:
     build:
       context: ../../
       dockerfile: ops/docker/api.Dockerfile
     container_name: redactldr-api
     environment:
+      # Local defaults allow zero-config bootstrap for development.
       ENVIRONMENT: ${ENVIRONMENT:-local}
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/redactldr}
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/redactldr}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_BACKEND_URL: ${CELERY_BACKEND_URL:-redis://redis:6379/1}
       AWS_REGION: ${AWS_REGION:-us-east-1}
@@ -31,24 +39,29 @@ services:
       CLERK_ISSUER_URL: ${CLERK_ISSUER_URL:-}
       CLERK_JWKS_URL: ${CLERK_JWKS_URL:-}
       CLERK_AUDIENCE: ${CLERK_AUDIENCE:-redactldr-api}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       OTEL_SERVICE_NAME: redactldr-api
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     ports:
       - "8000:8000"
     depends_on:
       - postgres
       - redis
-      - otel-collector
 
+  # Celery worker service: background detect/export/summary jobs.
   worker:
     build:
       context: ../../
       dockerfile: ops/docker/worker.Dockerfile
     container_name: redactldr-worker
+    # Local development is latency-oriented, not throughput-oriented. The solo
+    # pool avoids an extra prefork child process and keeps memory predictable.
+    command: ["celery", "-A", "services.worker.app.celery_app.celery", "worker", "-Q", "default,celery", "--loglevel=INFO", "--pool=solo", "--concurrency=1"]
     environment:
+      # Shares infra dependencies with API; task logic runs here.
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/redactldr}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_BACKEND_URL: ${CELERY_BACKEND_URL:-redis://redis:6379/1}
@@ -60,12 +73,27 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       OTEL_SERVICE_NAME: redactldr-worker
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     depends_on:
       - postgres
       - redis
-      - otel-collector
 
+  # Celery beat: hourly soft-delete of uploads that never finished.
+  beat:
+    build:
+      context: ../../
+      dockerfile: ops/docker/worker.Dockerfile
+    container_name: redactldr-beat
+    command: ["celery", "-A", "services.worker.app.celery_app.celery", "beat", "--loglevel=INFO"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/redactldr}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_BACKEND_URL: ${CELERY_BACKEND_URL:-redis://redis:6379/1}
+    depends_on:
+      - postgres
+      - redis
+
+  # PostgreSQL primary relational datastore.
   postgres:
     image: postgres:16-alpine
     container_name: redactldr-postgres
@@ -75,16 +103,21 @@ services:
       POSTGRES_USER: postgres
     ports:
       - "5432:5432"
+    # Persist DB data across container restarts.
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # Redis broker/result backend for Celery.
   redis:
     image: redis:7-alpine
     container_name: redactldr-redis
 
+  # OpenTelemetry collector receives OTLP traces/metrics from services.
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.117.0
     container_name: redactldr-otel-collector
+    profiles:
+      - observability
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
@@ -93,4 +126,5 @@ services:
       - "4318:4318"
 
 volumes:
+  # Named volume for postgres durable local state.
   postgres_data:

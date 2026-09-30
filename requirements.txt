@@ -8,6 +8,7 @@ pydantic-settings
 python-jose[cryptography]
 httpx
 sqlalchemy
+alembic
 psycopg[binary]
 pikepdf
 langchain
@@ -19,3 +20,4 @@ opentelemetry-instrumentation-fastapi
 opentelemetry-instrumentation-celery
 pytest
 pytest-asyncio
+moto[s3]

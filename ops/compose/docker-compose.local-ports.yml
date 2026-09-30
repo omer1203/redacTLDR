@@ -1,0 +1,17 @@
+# Local override when default ports (5432, 8000) are taken by another stack.
+services:
+  postgres:
+    ports: !override
+      - "5433:5432"
+  api:
+    ports: !override
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/redactldr
+      MIGRATION_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/redactldr
+  worker:
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/redactldr
+  web:
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8001

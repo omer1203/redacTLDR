@@ -1,2 +1,5 @@
 aws_region  = "us-east-1"
 environment = "staging"
+
+# Bucket CORS for browser uploads/downloads (presigned URLs). Add production web origins.
+# s3_browser_allowed_origins = ["https://app.example.com"]
