@@ -19,7 +19,34 @@ export type DocumentStatus =
 export interface DocumentRecord {
   id: string;
   filename: string;
+  contentType: string;
   mode: DocumentMode;
+  safeMode: boolean;
   status: DocumentStatus;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentApiDto {
+  id: string;
+  filename: string;
+  content_type: string;
+  mode: DocumentMode;
+  safe_mode: boolean;
+  status: DocumentStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export function toDocumentRecord(dto: DocumentApiDto): DocumentRecord {
+  return {
+    id: dto.id,
+    filename: dto.filename,
+    contentType: dto.content_type,
+    mode: dto.mode,
+    safeMode: dto.safe_mode,
+    status: dto.status,
+    createdAt: dto.created_at,
+    updatedAt: dto.updated_at,
+  };
 }

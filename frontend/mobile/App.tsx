@@ -41,7 +41,7 @@ function UploadFlow() {
   const pickAndUpload = async () => {
     setUploading(true);
     setStatus('Picking file...');
-    // flow: pick → create doc → PUT to S3 → ingestDone. Content-Type must match what we signed.
+    // pick → create doc → PUT raw bytes to presigned URL (no Content-Type header) → ingestDone
 
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -72,19 +72,22 @@ function UploadFlow() {
         throw new Error(`Create failed: ${createRes.status} ${errText}`);
       }
 
-      const { id, presignedPutUrl } = await createRes.json();
+      const createJson = await createRes.json();
+      const { id, presignedPutUrl } = createJson as {
+        id: string;
+        presignedPutUrl: string;
+      };
       setDocId(id);
       setStatus('Uploading to S3...');
 
-      const blob = await (await fetch(file.uri)).blob();
+      const payload = await (await fetch(file.uri)).arrayBuffer();
       const putRes = await fetch(presignedPutUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': contentType },
-        body: blob,
+        body: payload,
       });
 
       if (!putRes.ok) {
-        throw new Error(`S3 upload failed: ${putRes.status}. Check Content-Type matches.`);
+        throw new Error(`S3 upload failed: ${putRes.status}`);
       }
 
       setStatus('Finalizing...');
@@ -132,7 +135,7 @@ export default function App() {
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.section}>
-            <Text style={styles.title}>redactldr</Text>
+            <Text style={styles.title}>RedacTLDR</Text>
             <Text style={styles.subtitle}>Health Check</Text>
             <HealthCheck />
           </View>

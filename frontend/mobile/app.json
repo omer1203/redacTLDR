@@ -1,6 +1,6 @@
 { 
     "expo": {
-        "name": "redactldr",
+        "name": "RedacTLDR",
         "slug": "redactldr",
         "scheme": "redactldr",
         "sdkVersion": "51.0.0",
