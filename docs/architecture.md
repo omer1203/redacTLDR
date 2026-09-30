@@ -1,67 +1,98 @@
-# redactldr Architecture
+# RedacTLDR Architecture
 
-## Goals
+This document describes the intended production architecture and the currently implemented runtime boundaries.
 
-- Privacy-preserving PDF intelligence with true redaction.
-- Website-first UX with secure upload, review, export, and safe summaries.
-- Strong operational posture: observability, security scanning, reproducible deploys.
+## System Goals
 
-## System Components
+- privacy-preserving document intelligence
+- website-first SaaS UX
+- async heavy processing
+- policy-driven behavior for redaction and AI usage
+- security and observability as built-in concerns
+
+## High-Level Components
 
 ```mermaid
 flowchart LR
-  user[UserBrowser] --> web[NextjsWeb_apps_web]
-  web --> clerk[ClerkAuth]
-  web --> api[FastAPI_services_api]
-  api --> db[SupabasePostgres]
-  api --> s3[S3PrivateBuckets]
-  api --> redis[RedisBrokerBackend]
-  api --> otel[OTelCollector]
-  redis --> worker[CeleryWorker_services_worker]
-  worker --> textract[TextractAsync]
-  worker --> comprehend[ComprehendPII]
-  worker --> bedrock[BedrockClaude]
-  worker --> pikepdf[pikepdfRedaction]
+  browser[User Browser] --> web[Next.js Web]
+  web --> clerk[Clerk Auth]
+  web --> api[FastAPI API]
+  api --> db[(Postgres/Supabase)]
+  api --> s3[(S3 Originals/Downloads)]
+  api --> redis[(Redis Broker)]
+  redis --> worker[Celery Worker]
+  worker --> textract[Textract OCR]
+  worker --> comprehend[Comprehend PII]
+  worker --> bedrock[Bedrock Claude]
   worker --> db
   worker --> s3
-  worker --> otel
 ```
 
-## Data Model (v1)
+## Runtime Responsibilities
 
-Core entities:
+### Web (`apps/web`)
 
-- `documents`: uploaded source metadata and lifecycle state.
-- `detections`: proposed PII findings with page/block/bbox references.
-- `manual_redactions`: user review actions and custom redactions.
-- `exports`: generated redacted PDF artifacts.
-- `summaries`: structured JSON plus markdown outputs.
-- `audit_logs`: immutable event trail for key security and business actions.
+- user-facing dashboard and workflows
+- protected routes and token minting through Clerk
+- React Query state management for API-backed workflows
 
-## Processing Flow
+### API (`services/api`)
 
-1. Web requests presigned URL for upload.
-2. Browser uploads PDF directly to private S3 bucket.
-3. API stores document metadata and queues `detect_job`.
-4. Worker runs OCR + PII detection and persists detections.
-5. User reviews detections, adds custom redactions, and saves decisions.
-6. API queues `export_job` for true redaction output.
-7. API queues `summary_job` with masked text in safe mode.
-8. Export and summary are stored and exposed via authorized APIs.
+- auth verification
+- ownership and policy checks
+- orchestration of document lifecycle state
+- presigned URL issuance
+- task enqueueing
+- read/write contracts for UI
 
-## Privacy Rules
+### Worker (`services/worker`)
 
-- Safe mode controls whether raw or masked text is sent to LLM.
-- Typed placeholders (`[NAME]`, `[EMAIL]`, etc.) are stable per document.
-- 7-day default retention policy is enforced by cleanup tasks.
-- Secrets are loaded from environment variables only.
+- OCR extraction
+- PII detection
+- redaction export generation
+- AI summary generation
+- status updates and failure handling
+
+## Data Ownership and Authorization
+
+- primary ownership boundary is `owner_user_id`/user subject in API checks
+- hybrid strategy:
+  - backend authorization checks for request-time enforcement
+  - selective RLS on sensitive tables as platform matures
+
+## Privacy Model
+
+- workspace policy controls:
+  - safe mode masking behavior
+  - OCR storage behavior
+  - export constraints
+- redaction export must remove underlying text, not only draw overlays
+- logs should avoid raw PII whenever possible
+
+## Security Controls (Planned and Incremental)
+
+- Clerk JWT verification via JWKS cache
+- short-lived presigned URLs
+- KMS encryption strategy for document storage
+- least-privilege IAM roles
+- audit logging for sensitive operations
 
 ## Observability
 
-- OpenTelemetry traces/metrics in API and workers.
-- Collector in local compose to centralize telemetry.
-- Core metrics:
-  - API latency and error rates
-  - queue depth and job latency
-  - failure rates per stage
-  - LLM token usage metadata
+- OpenTelemetry instrumentation in API and worker
+- trace and metrics coverage for:
+  - API latency/error rates
+  - queue/job latency and failures
+  - OCR, detection, export, summary durations
+
+## Deployment Strategy
+
+- primary: ECS Fargate
+- optional later: Kubernetes/Helm path
+
+## Milestone Alignment
+
+For execution order and acceptance criteria see:
+
+- `docs/EXECUTION_PLAN.md`
+- `docs/MILESTONES_DETAILED.md`

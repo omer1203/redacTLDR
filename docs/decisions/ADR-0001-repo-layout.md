@@ -1,4 +1,4 @@
-# ADR-0001: Adopt Monorepo Layout for redactldr
+# ADR-0001: Adopt Monorepo Layout for RedacTLDR
 
 ## Status
 
@@ -6,14 +6,14 @@ Accepted
 
 ## Context
 
-redactldr needs to ship a website-first product with API, asynchronous workers, shared operational tooling, and infrastructure-as-code. The current repository started as a small backend + mobile prototype and lacks clear boundaries for the full platform.
+RedacTLDR needs to ship a website-first product with API, asynchronous workers, shared operational tooling, and infrastructure-as-code. The current repository started as a small backend + mobile prototype and lacks clear boundaries for the full platform.
 
 ## Decision
 
 Adopt this top-level layout:
 
 - `apps/web`: Next.js App Router frontend.
-- `apps/mobile`: optional mobile app surface.
+- `frontend/mobile`: deferred secondary mobile surface (not in current critical path).
 - `services/api`: FastAPI service.
 - `services/worker`: Celery worker service.
 - `ops/compose`: local container orchestration and OTel collector config.

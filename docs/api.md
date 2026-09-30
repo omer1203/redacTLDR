@@ -1,6 +1,8 @@
-# redactldr API Contracts (v1)
+# RedacTLDR API Contracts (v1)
 
 Base path: `/v1`
+
+This is the API contract snapshot for implemented and near-term endpoints up to `M2`, with forward references for upcoming milestones.
 
 ## Health
 
@@ -10,74 +12,76 @@ Base path: `/v1`
 ## Auth
 
 - `GET /v1/auth/me`
-  - Requires Clerk bearer token.
-  - Returns user identity resolved from JWT.
+  - Requires bearer token (or local dev bypass where enabled).
+  - Returns resolved caller identity.
 
 ## Documents
 
 - `POST /v1/documents`
-  - Creates document metadata and presigned upload URL.
-  - Request:
-    - `filename: string`
-    - `contentType: string` (default `application/pdf`)
-    - `mode: DocumentMode`
-    - `safeMode?: boolean`
-  - Response:
-    - `id`, `s3Key`, `presignedPutUrl`, `status`
+  - Creates document metadata.
+  - Returns presigned S3 PUT URL for direct upload.
+  - Request fields:
+    - `filename`
+    - `contentType` (PDF)
+    - `mode`
+    - `safeMode`
+    - `sizeBytes` (optional)
 
 - `GET /v1/documents`
-  - Lists user documents with pagination.
+  - Lists caller-owned documents.
 
 - `GET /v1/documents/{docId}`
-  - Returns document detail and status.
+  - Gets one caller-owned document.
+
+- `POST /v1/documents/{docId}/ingest-complete`
+  - Canonical ingest completion endpoint.
+  - Verifies upload object before queueing detect task.
 
 - `POST /v1/documents/{docId}/ingestDone`
-  - Marks upload complete and enqueues detection.
+  - Backward-compatible alias.
+  - Planned deprecation after clients migrate to `ingest-complete`.
 
-## Review
+- `GET /v1/documents/{docId}/jobs`
+  - Lists jobs for the document, newest first.
+  - Each item: `jobType`, `status`, `attemptCount`, `lastError`, `startedAt`, `finishedAt`.
+
+- `POST /v1/documents/{docId}/process`
+  - Re-runs detection for `FAILED` or stuck documents.
+  - No-op when detection is already queued or already finished.
+
+- `DELETE /v1/documents/{docId}`
+  - Soft-deletes the row and deletes the original and export objects.
+  - Returns 204.
+
+## Review and Redaction Data
 
 - `GET /v1/documents/{docId}/detections`
-  - Returns proposed detections with citations and confidence.
-
 - `POST /v1/documents/{docId}/redactions`
-  - Saves review decision or manual redaction.
-  - Supports entity-level and custom bbox/span redactions.
+- `GET /v1/documents/{docId}/review-state`
 
 ## Export
 
 - `POST /v1/documents/{docId}/export`
-  - Enqueues true redaction export job.
-
 - `GET /v1/documents/{docId}/export`
-  - Returns export status and optional presigned download URL.
 
-## Summaries
+## Summary
 
 - `POST /v1/documents/{docId}/summaries`
-  - Enqueues summary generation for selected mode.
-
 - `GET /v1/documents/{docId}/summaries/latest`
-  - Returns latest summary:
-    - `json: object` (schema per mode)
-    - `markdown: string`
-    - `citations: [{page, block}]`
-    - `confidence: object`
+- `GET /v1/documents/modes/schema`
 
 ## Audit
 
 - `GET /v1/audit`
-  - Returns paginated audit events for user/workspace.
 
-## Error Shape
+## Auth Integration Requirements
 
-All errors follow:
+- Clerk JWT audience must match API expectations.
+- Web token minting enforces explicit JWT template (`CLERK_JWT_TEMPLATE`) when Clerk mode is enabled.
+- JWKS caching is used server-side for verification performance and rotation resilience.
+- Local development may use `x-demo-user` header when `ENVIRONMENT=local`.
 
-```json
-{
-  "error": {
-    "code": "string",
-    "message": "string",
-    "details": {}
-  }
-}
-```
+## Error Handling
+
+Current routes primarily return FastAPI standard error payloads with `detail`.
+As part of later hardening milestones, error shape will be standardized across all routes.
