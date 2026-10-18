@@ -17,8 +17,8 @@ export default function SignInPage() {
     );
   }
   return (
-    <main className="mx-auto flex min-h-[70vh] max-w-md items-center justify-center p-8">
-      <SignIn />
+    <main className="flex min-h-screen w-full items-center justify-center px-6 py-16">
+      <SignIn fallbackRedirectUrl="/dashboard" forceRedirectUrl="/dashboard" signUpUrl="/sign-up" />
     </main>
   );
 }

@@ -8,6 +8,8 @@ export type DocumentMode =
 export type DocumentStatus =
   | "CREATED"
   | "UPLOADED"
+  | "PROCESSING"
+  | "READY_FOR_REVIEW"
   | "DETECT_QUEUED"
   | "DETECTED"
   | "EXPORT_QUEUED"
@@ -23,6 +25,9 @@ export interface DocumentRecord {
   mode: DocumentMode;
   safeMode: boolean;
   status: DocumentStatus;
+  pageCount: number | null;
+  processingStage: string | null;
+  errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -34,6 +39,9 @@ export interface DocumentApiDto {
   mode: DocumentMode;
   safe_mode: boolean;
   status: DocumentStatus;
+  page_count?: number | null;
+  processing_stage?: string | null;
+  error_message?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,6 +54,9 @@ export function toDocumentRecord(dto: DocumentApiDto): DocumentRecord {
     mode: dto.mode,
     safeMode: dto.safe_mode,
     status: dto.status,
+    pageCount: dto.page_count ?? null,
+    processingStage: dto.processing_stage ?? null,
+    errorMessage: dto.error_message ?? null,
     createdAt: dto.created_at,
     updatedAt: dto.updated_at,
   };
