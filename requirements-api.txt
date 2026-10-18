@@ -5,7 +5,7 @@ redis
 boto3
 python-dotenv
 pydantic-settings
-python-jose[cryptography]
+pyjwt[crypto]
 httpx
 sqlalchemy
 alembic

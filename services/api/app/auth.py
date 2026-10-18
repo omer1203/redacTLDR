@@ -10,8 +10,8 @@ import logging
 from typing import Any
 
 import httpx
+import jwt
 from fastapi import Depends, Header, HTTPException
-from jose import jwt
 
 from services.api.app.config import get_settings
 from services.api.app.schemas import UserPrincipal
@@ -35,7 +35,6 @@ async def _fetch_jwks() -> dict[str, Any]:
 
     now = datetime.now(timezone.utc)
     if _JWKS_CACHE["keys"] and now < _JWKS_CACHE["expires_at"]:
-        # `jwt.decode` accepts a JWKS-like structure: {"keys": [...]}.
         return {"keys": _JWKS_CACHE["keys"]}
 
     try:
@@ -77,13 +76,14 @@ async def get_current_user(
     jwks = await _fetch_jwks()
     try:
         # Validate signature + standard claims against Clerk configuration.
+        kid = jwt.get_unverified_header(token).get("kid")
+        signing_key = next(key for key in jwt.PyJWKSet.from_dict(jwks).keys if key.key_id == kid)
         payload = jwt.decode(
             token,
-            jwks,
+            signing_key.key,
             algorithms=["RS256"],
             audience=settings.clerk_audience,
             issuer=settings.clerk_issuer_url or None,
-            options={"verify_at_hash": False},
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("JWT verification failed for request: %s", exc.__class__.__name__)
