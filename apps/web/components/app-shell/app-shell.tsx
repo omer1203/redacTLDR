@@ -7,10 +7,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ActivityView } from "@/components/activity-view";
+import { InstantNavProvider } from "@/components/app-shell/instant-nav";
 import { AppNav } from "@/components/app-shell/nav";
 import { NotificationBell } from "@/components/app-shell/notification-bell";
 import { DashboardView } from "@/components/documents/dashboard-view";
+import { DocumentOverview } from "@/components/documents/document-overview";
+import { ReviewScreen } from "@/components/review/review-screen";
 import { SettingsView } from "@/components/settings-view";
+import { SummaryView } from "@/components/summaries/summary-view";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Wordmark } from "@/components/wordmark";
 import { Button } from "@/components/ui/button";
@@ -22,16 +26,28 @@ import { useApiToken } from "@/lib/review/token";
 const WARM_ROUTES = ["/dashboard", "/activity", "/settings"];
 
 function screenFor(href: string) {
-  if (href.startsWith("/activity")) {
+  const path = href.split("?")[0];
+  if (path.startsWith("/activity")) {
     return <ActivityView />;
   }
-  if (href.startsWith("/settings")) {
+  if (path.startsWith("/settings")) {
     return <SettingsView />;
   }
-  if (href.startsWith("/dashboard")) {
+  if (path.startsWith("/dashboard")) {
     return <DashboardView />;
   }
-  return null;
+  const document = path.match(/^\/documents\/([^/]+)(?:\/(review|summary))?$/);
+  if (!document) {
+    return null;
+  }
+  const documentId = decodeURIComponent(document[1]);
+  if (document[2] === "review") {
+    return <ReviewScreen documentId={documentId} />;
+  }
+  if (document[2] === "summary") {
+    return <SummaryView documentId={documentId} />;
+  }
+  return <DocumentOverview documentId={documentId} />;
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -88,6 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
+    <InstantNavProvider go={go}>
     <div className="min-h-screen bg-background md:grid md:grid-cols-[minmax(240px,17rem)_1fr]">
       <aside className="hidden flex-col bg-sidebar text-sidebar-foreground md:flex">
         <div className="px-5 py-6" onClick={() => go("/dashboard")}>
@@ -123,5 +140,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 px-[clamp(1.25rem,3vw,3.5rem)] py-8">{immediate ?? children}</main>
       </div>
     </div>
+    </InstantNavProvider>
   );
 }

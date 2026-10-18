@@ -3,8 +3,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, Shield } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
+import { useInstantNav } from "@/components/app-shell/instant-nav";
 import { StatusBadge } from "@/components/documents/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { deleteDocument, reprocessDocument } from "@/lib/api";
+import { deleteDocument, getDocument, reprocessDocument } from "@/lib/api";
 import { formatUtc } from "@/lib/format";
 import { modeMeta } from "@/lib/modes";
 import { useApiToken } from "@/lib/review/token";
@@ -62,7 +64,30 @@ function RowActions({ doc }: { doc: DocumentRecord }) {
 
 export function DocumentTable({ documents }: { documents: DocumentRecord[] }) {
   const router = useRouter();
-  const open = (id: string) => router.push(`/documents/${id}`);
+  const open = useInstantNav();
+  const getToken = useApiToken();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const token = await getToken();
+      if (cancelled) {
+        return;
+      }
+      for (const doc of documents.slice(0, 12)) {
+        router.prefetch(`/documents/${doc.id}`);
+        void queryClient.prefetchQuery({
+          queryKey: ["document", doc.id],
+          queryFn: () => getDocument(token, doc.id),
+          staleTime: 15_000,
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [documents, getToken, queryClient, router]);
 
   if (documents.length === 0) {
     return (
@@ -92,7 +117,7 @@ export function DocumentTable({ documents }: { documents: DocumentRecord[] }) {
           </TableHeader>
           <TableBody>
             {documents.map((doc) => (
-              <TableRow key={doc.id} className="cursor-pointer" onClick={() => open(doc.id)}>
+              <TableRow key={doc.id} className="cursor-pointer" onClick={() => open(`/documents/${doc.id}`)}>
                 <TableCell className="font-medium">{doc.filename}</TableCell>
                 <TableCell>{modeMeta(doc.mode).label}</TableCell>
                 <TableCell>
@@ -113,7 +138,7 @@ export function DocumentTable({ documents }: { documents: DocumentRecord[] }) {
           <Card
             key={doc.id}
             className="flex cursor-pointer items-start justify-between gap-3 p-4 transition-transform duration-200 motion-safe:active:scale-[0.99]"
-            onClick={() => open(doc.id)}
+            onClick={() => open(`/documents/${doc.id}`)}
           >
             <div className="min-w-0 space-y-2">
               <p className="truncate font-medium">{doc.filename}</p>

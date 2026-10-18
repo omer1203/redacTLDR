@@ -1,7 +1,6 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { useEffect, useRef, useState } from "react";
 
 import { ItemsPanel } from "@/components/review/items-panel";
@@ -170,12 +169,7 @@ function Notice({ documentId, text }: { documentId: string; text: string }) {
     <Card className="mx-auto max-w-xl">
       <CardContent className="flex flex-col items-start gap-4 py-8 text-sm">
         <p>{text}</p>
-        <Button variant="outline" asChild>
-          <Link href={`/documents/${documentId}`}>
-            <ArrowLeft className="h-4 w-4" />
-            Back to document
-          </Link>
-        </Button>
+        <BackLink href={`/documents/${documentId}`} label="Back to document" />
       </CardContent>
     </Card>
   );

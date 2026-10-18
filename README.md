@@ -7,13 +7,16 @@
 Upload a sensitive PDF, find the personal information in it, black it out for real, and get a short AI summary that never sees the private details.
 
 <p align="center">
-  <img src="images/home.png" alt="Landing page" width="820">
+  <img src="images/home.png" alt="Landing page" width="820"><br>
+  Landing page
 </p>
 <p align="center">
-  <img src="images/sign-in.png" alt="Sign-in screen" width="820">
+  <img src="images/sign-in.png" alt="Sign-in screen" width="820"><br>
+  Sign in
 </p>
 <p align="center">
-  <img src="images/documents.png" alt="Documents dashboard" width="820">
+  <img src="images/documents.png" alt="Documents dashboard" width="820"><br>
+  Documents
 </p>
 
 ## In plain terms
@@ -90,7 +93,7 @@ ops/docker/          API and worker images
 ops/k8s/             Optional Helm chart (ECS is the primary target)
 infra/terraform/     AWS infrastructure and the deploy runbook
 frontend/mobile/     Early Expo mobile client, paused while the web app is the focus
-images/              Logo and screenshots used in this README
+images/              Logo, site icon, and the screenshots above
 scripts/             Local start/stop and AWS helper scripts
 ```
 

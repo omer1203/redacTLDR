@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
+import { useScheduleNav } from "@/components/app-shell/instant-nav";
 import { BackLink } from "@/components/back-link";
 import { StatusBadge } from "@/components/documents/status-badge";
 import { ExportDialog } from "@/components/exports/export-dialog";
@@ -36,6 +37,7 @@ const STEPS: { id: TimelineStep; label: string }[] = [
 
 export function DocumentOverview({ documentId }: { documentId: string }) {
   const getToken = useApiToken();
+  const go = useScheduleNav();
   const documentQuery = useQuery({
     queryKey: ["document", documentId],
     queryFn: async () => getDocument(await getToken(), documentId),
@@ -59,7 +61,7 @@ export function DocumentOverview({ documentId }: { documentId: string }) {
   if (documentQuery.isLoading) {
     return (
       <div className="flex flex-col gap-4">
-        <BackLink href="/dashboard">Documents</BackLink>
+        <BackLink href="/dashboard" label="Back to documents" />
         <p className="text-sm text-muted-foreground">Loading document…</p>
       </div>
     );
@@ -67,7 +69,7 @@ export function DocumentOverview({ documentId }: { documentId: string }) {
   if (documentQuery.isError || !documentQuery.data) {
     return (
       <div className="flex flex-col gap-4">
-        <BackLink href="/dashboard">Documents</BackLink>
+        <BackLink href="/dashboard" label="Back to documents" />
         <p className="text-sm text-destructive">{(documentQuery.error as Error).message}</p>
       </div>
     );
@@ -80,7 +82,7 @@ export function DocumentOverview({ documentId }: { documentId: string }) {
 
   return (
     <div className="flex w-full flex-col gap-8">
-      <BackLink href="/dashboard">Documents</BackLink>
+      <BackLink href="/dashboard" label="Back to documents" />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">{mode.label}</p>
@@ -155,7 +157,9 @@ export function DocumentOverview({ documentId }: { documentId: string }) {
       </Tabs>
       <div className="flex flex-wrap gap-2">
         <Button asChild>
-          <Link href={`/documents/${document.id}/review`}>Review</Link>
+          <Link href={`/documents/${document.id}/review`} onClick={() => go(`/documents/${document.id}/review`)}>
+            Review
+          </Link>
         </Button>
         <ExportDialog
           documentId={document.id}
@@ -165,7 +169,9 @@ export function DocumentOverview({ documentId }: { documentId: string }) {
         />
         {EXPORTABLE.has(document.status) ? (
           <Button variant="outline" asChild>
-            <Link href={`/documents/${document.id}/summary`}>Summary</Link>
+            <Link href={`/documents/${document.id}/summary`} onClick={() => go(`/documents/${document.id}/summary`)}>
+              Summary
+            </Link>
           </Button>
         ) : (
           <Button variant="outline" disabled>

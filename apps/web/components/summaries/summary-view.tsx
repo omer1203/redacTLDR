@@ -116,7 +116,7 @@ export function SummaryView({ documentId }: { documentId: string }) {
     <div className="flex w-full flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <BackLink href={`/documents/${documentId}`}>Document</BackLink>
+          <BackLink href={`/documents/${documentId}`} label="Back to document" />
           <h1 className="font-display text-[clamp(1.9rem,2.6vw,2.9rem)] font-medium tracking-tight">Summary</h1>
         </div>
         <div className="flex flex-wrap gap-2">

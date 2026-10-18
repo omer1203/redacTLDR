@@ -1,8 +1,10 @@
 "use client";
 
-import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import Link from "next/link";
 
+import { useScheduleNav } from "@/components/app-shell/instant-nav";
+import { BackLink } from "@/components/back-link";
 import { ExportDialog } from "@/components/exports/export-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,18 +16,14 @@ import { useSavingCount } from "@/lib/review/queries";
 export function ReviewTopBar({ state, documentId }: { state: ReviewState; documentId: string }) {
   const saving = useSavingCount(documentId);
   const total = redactionTotal(state);
+  const go = useScheduleNav();
 
   // Export reads the saved review from the database, so it waits for pending saves.
   const actionsDisabled = !state.reviewable || saving > 0;
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <Button variant="ghost" size="sm" className="px-2" asChild>
-        <Link href={`/documents/${documentId}`}>
-          <ArrowLeft className="h-4 w-4" />
-          Document
-        </Link>
-      </Button>
+      <BackLink href={`/documents/${documentId}`} label="Back to document" />
       <div className="min-w-0 flex-1">
         <h1 className="truncate text-xl font-semibold" title={state.filename}>
           {state.filename}
@@ -56,7 +54,9 @@ export function ReviewTopBar({ state, documentId }: { state: ReviewState; docume
           </Button>
         ) : (
           <Button variant="outline" asChild>
-            <Link href={`/documents/${documentId}/summary`}>Summary</Link>
+            <Link href={`/documents/${documentId}/summary`} onClick={() => go(`/documents/${documentId}/summary`)}>
+              Summary
+            </Link>
           </Button>
         )}
         <ExportDialog documentId={documentId} disabled={actionsDisabled} redactionCount={total} />
