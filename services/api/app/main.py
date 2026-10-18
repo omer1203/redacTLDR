@@ -12,12 +12,17 @@ from sqlalchemy.exc import OperationalError
 
 from services.api.app.config import get_settings
 from services.api.app.db import Base, engine, ensure_database_exists
-from services.api.app.routes import auth, documents
+from services.shared.log_json import install_json_logs
+from services.shared.log_redact import install_redacting_logs
+from services.api.app.routes import account, auth, documents, notifications, policies
+from services.api.app.routes.settings import router as settings_router
 from services.api.app.routes.audit import router as audit_router
 from services.api.app.telemetry import setup_telemetry
 
 # Read process-level configuration once at import time.
 settings = get_settings()
+install_redacting_logs()
+install_json_logs()
 
 # Create the ASGI application object used by uvicorn/gunicorn workers.
 app = FastAPI(title=settings.app_name, version=settings.app_version)
@@ -63,7 +68,11 @@ def startup() -> None:
 # Register versioned API routers. Each router owns a functional domain.
 app.include_router(auth.router)
 app.include_router(documents.router)
+app.include_router(policies.router)
 app.include_router(audit_router)
+app.include_router(notifications.router)
+app.include_router(settings_router)
+app.include_router(account.router)
 
 
 @app.get("/v1/health")

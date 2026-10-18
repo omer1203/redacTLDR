@@ -12,6 +12,10 @@ class DocumentMode(StrEnum):
 class DocumentStatus(StrEnum):
     CREATED = "CREATED"
     UPLOADED = "UPLOADED"
+    # R2 lifecycle. DETECT_QUEUED and DETECTED remain so rows written before the
+    # R2 migration still validate; that migration maps them forward.
+    PROCESSING = "PROCESSING"
+    READY_FOR_REVIEW = "READY_FOR_REVIEW"
     DETECT_QUEUED = "DETECT_QUEUED"
     DETECTED = "DETECTED"
     EXPORT_QUEUED = "EXPORT_QUEUED"

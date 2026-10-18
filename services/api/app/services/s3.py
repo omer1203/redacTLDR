@@ -61,9 +61,23 @@ def make_originals_key(user_id: str, document_id: uuid.UUID, filename: str) -> s
     return f"originals/{user_id}/{document_id}/{int(time.time())}-{safe}"
 
 
-def make_export_key(user_id: str, document_id: str) -> str:
-    """Build output key for exported PDFs."""
+def make_export_key(user_id: str, document_id: str, export_id: str | None = None) -> str:
+    """Build output key for exported PDFs.
+
+    With `export_id` (R5) every export gets its own object, so a re-export never
+    overwrites a file someone may still be downloading. The short form is the
+    pre-R5 layout, kept for rows that already point at it.
+    """
+    if export_id:
+        return f"exports/{user_id}/{document_id}/{export_id}.pdf"
     return f"exports/{user_id}/{document_id}.pdf"
+
+
+def redacted_download_name(filename: str) -> str:
+    """`resume.pdf` → `resume-redacted.pdf`, ASCII-only so it is safe inside a Content-Disposition header."""
+    stem = filename.rsplit(".", 1)[0] if filename.lower().endswith(".pdf") else filename
+    safe = "".join(c if c.isascii() and (c.isalnum() or c in "-_") else "-" for c in stem).strip("-")
+    return f"{(safe or 'document')[:100]}-redacted.pdf"
 
 
 def _validate_upload_request(content_type: str, size_bytes: int | None) -> None:
@@ -87,14 +101,30 @@ def presign_put(key: str, content_type: str, size_bytes: int | None = None, expi
     )
 
 
-def presign_download(key: str, expires: int | None = None) -> str:
-    """Generate temporary URL for downloading generated exports."""
+def presign_original_get(key: str, expires: int = 300) -> str:
+    """Short-lived GET for the original PDF. The viewer uses this; exports stay on the downloads bucket."""
+    expires_in = max(60, min(expires, 900))
+    return _client().generate_presigned_url(
+        "get_object",
+        Params={"Bucket": _bucket_originals(), "Key": key},
+        ExpiresIn=expires_in,
+    )
+
+
+def presign_download(key: str, expires: int | None = None, filename: str | None = None) -> str:
+    """Generate temporary URL for downloading generated exports.
+
+    `filename` makes the browser save the file under that name instead of the S3 key.
+    """
     settings = get_settings()
     requested_expiry = expires if expires is not None else settings.upload_presign_ttl_seconds
     expires_in = max(60, min(requested_expiry, 3600))
+    params = {"Bucket": _bucket_downloads(), "Key": key}
+    if filename:
+        params["ResponseContentDisposition"] = f'attachment; filename="{filename}"'
     return _client().generate_presigned_url(
         "get_object",
-        Params={"Bucket": _bucket_downloads(), "Key": key},
+        Params=params,
         ExpiresIn=expires_in,
     )
 

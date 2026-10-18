@@ -18,3 +18,10 @@ def setup_telemetry(app) -> None:
     provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint, insecure=True)))
     trace.set_tracer_provider(provider)
     FastAPIInstrumentor.instrument_app(app)
+    try:
+        from opentelemetry.instrumentation.botocore import BotocoreInstrumentor
+
+        BotocoreInstrumentor().instrument()
+    except Exception:  # noqa: BLE001
+        # Presigned S3 calls still work. Spans for them need this package.
+        pass
