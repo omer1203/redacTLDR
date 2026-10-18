@@ -25,5 +25,8 @@ ENV PYTHONPATH=/app \
 # FastAPI/uvicorn listens on 8000 in this image.
 EXPOSE 8000
 
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/health')" || exit 1
+
 # Start API server.
 CMD ["uvicorn", "services.api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]

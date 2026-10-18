@@ -20,9 +20,10 @@ export function ReviewTopBar({ state, documentId }: { state: ReviewState; docume
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <Button variant="ghost" size="icon" asChild aria-label="Back to document">
+      <Button variant="ghost" size="sm" className="px-2" asChild>
         <Link href={`/documents/${documentId}`}>
           <ArrowLeft className="h-4 w-4" />
+          Document
         </Link>
       </Button>
       <div className="min-w-0 flex-1">

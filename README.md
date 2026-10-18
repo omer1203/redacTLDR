@@ -1,6 +1,20 @@
+<p align="center">
+  <img src="images/logo.png" alt="RedacTLDR logo" width="120">
+</p>
+
 # RedacTLDR
 
 Upload a sensitive PDF, find the personal information in it, black it out for real, and get a short AI summary that never sees the private details.
+
+<p align="center">
+  <img src="images/home.png" alt="Landing page" width="820">
+</p>
+<p align="center">
+  <img src="images/sign-in.png" alt="Sign-in screen" width="820">
+</p>
+<p align="center">
+  <img src="images/documents.png" alt="Documents dashboard" width="820">
+</p>
 
 ## In plain terms
 
@@ -76,6 +90,7 @@ ops/docker/          API and worker images
 ops/k8s/             Optional Helm chart (ECS is the primary target)
 infra/terraform/     AWS infrastructure and the deploy runbook
 frontend/mobile/     Early Expo mobile client, paused while the web app is the focus
+images/              Logo and screenshots used in this README
 scripts/             Local start/stop and AWS helper scripts
 ```
 
@@ -89,6 +104,8 @@ bash scripts/up.sh          # first run copies ops/compose/.env.example to ops/c
 
 - Web: http://localhost:3000
 - API health: http://localhost:8000/v1/health
+
+`scripts/up.sh` waits until Postgres, Redis, and the API are healthy, then returns while the web dev server is still booting. If port 5432 or 8000 is already taken, it moves Postgres to 5433 and the API to 8001 and points the web app at that same API port, so the browser does not keep calling a port nothing is listening on. The first page after a cold start can take a few seconds while Next.js compiles it. Later navigation stays in memory.
 
 Without Clerk keys the app runs in a local demo mode with no sign-in. Add Clerk keys to `ops/compose/.env` for the full sign-in flow. If browser uploads fail with an S3 CORS error, run `bash scripts/apply-s3-cors.sh`; `bash scripts/verify-local-s3.sh` checks that the credentials can reach the buckets.
 

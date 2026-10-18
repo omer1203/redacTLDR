@@ -78,7 +78,7 @@ export function DocumentTable({ documents }: { documents: DocumentRecord[] }) {
 
   return (
     <>
-      <div className="hidden md:block">
+      <div className="hidden overflow-hidden rounded-xl border bg-card md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -112,7 +112,7 @@ export function DocumentTable({ documents }: { documents: DocumentRecord[] }) {
         {documents.map((doc) => (
           <Card
             key={doc.id}
-            className="flex cursor-pointer items-start justify-between gap-3 p-4"
+            className="flex cursor-pointer items-start justify-between gap-3 p-4 transition-transform duration-200 motion-safe:active:scale-[0.99]"
             onClick={() => open(doc.id)}
           >
             <div className="min-w-0 space-y-2">

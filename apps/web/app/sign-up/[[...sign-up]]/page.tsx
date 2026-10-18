@@ -1,24 +1,34 @@
 import { SignUp } from "@clerk/nextjs";
 import Link from "next/link";
 
+import { AuthFrame, clerkAppearance } from "@/components/auth-frame";
+import { Button } from "@/components/ui/button";
+
 export default function SignUpPage() {
   const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
   if (!clerkEnabled) {
     return (
-      <main className="mx-auto max-w-xl p-8">
-        <h1 className="text-2xl font-semibold">Sign up unavailable</h1>
-        <p className="mt-3 text-slate-700">
-          Clerk is disabled in this environment. Use the local demo dashboard flow instead.
-        </p>
-        <Link className="mt-6 inline-block rounded bg-slate-900 px-4 py-2 text-white" href="/dashboard">
-          Go to dashboard
-        </Link>
-      </main>
+      <AuthFrame>
+        <div className="max-w-md">
+          <h1 className="font-display text-4xl font-medium tracking-tight">Sign up unavailable</h1>
+          <p className="mt-3 text-base leading-relaxed text-muted-foreground">
+            Clerk is disabled in this environment. Use the local demo dashboard flow instead.
+          </p>
+          <Button className="mt-6" asChild>
+            <Link href="/dashboard">Go to dashboard</Link>
+          </Button>
+        </div>
+      </AuthFrame>
     );
   }
   return (
-    <main className="flex min-h-screen w-full items-center justify-center px-6 py-16">
-      <SignUp fallbackRedirectUrl="/dashboard" forceRedirectUrl="/dashboard" signInUrl="/sign-in" />
-    </main>
+    <AuthFrame>
+      <SignUp
+        appearance={clerkAppearance}
+        fallbackRedirectUrl="/dashboard"
+        forceRedirectUrl="/dashboard"
+        signInUrl="/sign-in"
+      />
+    </AuthFrame>
   );
 }

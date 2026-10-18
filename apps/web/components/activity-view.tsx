@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -25,12 +25,14 @@ export function ActivityView() {
   const query = useQuery({
     queryKey: ["audit", eventType],
     queryFn: async () => listAuditEvents(await getToken(), eventType || undefined),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
 
   return (
     <div className="flex w-full flex-col gap-6">
       <div>
-        <h1 className="text-[clamp(1.75rem,2.5vw,2.75rem)] font-semibold">Activity</h1>
+        <h1 className="font-display text-[clamp(1.9rem,2.6vw,2.9rem)] font-medium tracking-tight">Activity</h1>
         <p className="mt-1 text-sm text-muted-foreground">Uploads, exports, summaries, and deletes for your account.</p>
       </div>
       <div className="flex flex-wrap gap-2">

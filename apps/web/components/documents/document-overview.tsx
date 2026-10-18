@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
+import { BackLink } from "@/components/back-link";
 import { StatusBadge } from "@/components/documents/status-badge";
 import { ExportDialog } from "@/components/exports/export-dialog";
 import { ExportHistory } from "@/components/exports/export-history";
@@ -56,10 +57,20 @@ export function DocumentOverview({ documentId }: { documentId: string }) {
   });
 
   if (documentQuery.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading document…</p>;
+    return (
+      <div className="flex flex-col gap-4">
+        <BackLink href="/dashboard">Documents</BackLink>
+        <p className="text-sm text-muted-foreground">Loading document…</p>
+      </div>
+    );
   }
   if (documentQuery.isError || !documentQuery.data) {
-    return <p className="text-sm text-destructive">{(documentQuery.error as Error).message}</p>;
+    return (
+      <div className="flex flex-col gap-4">
+        <BackLink href="/dashboard">Documents</BackLink>
+        <p className="text-sm text-destructive">{(documentQuery.error as Error).message}</p>
+      </div>
+    );
   }
 
   const document = documentQuery.data;
@@ -69,10 +80,11 @@ export function DocumentOverview({ documentId }: { documentId: string }) {
 
   return (
     <div className="flex w-full flex-col gap-8">
+      <BackLink href="/dashboard">Documents</BackLink>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">{mode.label}</p>
-          <h1 className="text-[clamp(1.75rem,2.5vw,2.75rem)] font-semibold">{document.filename}</h1>
+          <h1 className="font-display text-[clamp(1.9rem,2.6vw,2.9rem)] font-medium tracking-tight">{document.filename}</h1>
         </div>
         <StatusBadge status={document.status} stage={document.processingStage} />
       </div>

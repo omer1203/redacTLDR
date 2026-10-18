@@ -149,10 +149,12 @@ if [[ "${ATTACH}" == "true" ]]; then
     "${COMPOSE_FILES[@]}" \
     up ${BUILD_FLAG}
 else
+  # --wait returns when Postgres, Redis, and the API are healthy. The web
+  # dev server is not part of that wait; Next.js keeps booting after this.
   docker compose \
     --env-file "${ENV_FILE}" \
     "${COMPOSE_FILES[@]}" \
-    up -d ${BUILD_FLAG}
+    up -d --wait --wait-timeout 300 ${BUILD_FLAG}
 fi
 
 echo

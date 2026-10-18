@@ -1,19 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect } from "react";
 
+import { StatusScreen } from "@/components/status-screen";
 import { Button } from "@/components/ui/button";
 
-export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function RootError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error(error);
   }, [error]);
 
+  const detail = error.message?.trim().slice(0, 280) || "The page could not be loaded.";
+
   return (
-    <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-start justify-center gap-3 px-6">
-      <h1 className="text-2xl font-semibold">Something went wrong</h1>
-      <p className="text-sm text-muted-foreground">{error.message || "The page could not be loaded."}</p>
+    <StatusScreen title="Something went wrong" body={detail}>
       <Button onClick={reset}>Try again</Button>
-    </main>
+      <Button variant="outline" asChild>
+        <Link href="/">Go home</Link>
+      </Button>
+    </StatusScreen>
   );
 }

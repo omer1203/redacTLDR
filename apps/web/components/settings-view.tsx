@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { deleteAccount, getSettings, saveSettings, type AccountSettings } from "@/lib/api/settings";
@@ -20,6 +21,7 @@ export function SettingsView() {
   const query = useQuery({
     queryKey: ["settings"],
     queryFn: async () => getSettings(await getToken()),
+    staleTime: 60_000,
   });
   const save = useMutation({
     mutationFn: async (settings: AccountSettings) => saveSettings(await getToken(), settings),
@@ -38,21 +40,30 @@ export function SettingsView() {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  if (query.isLoading || !query.data) {
-    return <p className="text-sm text-muted-foreground">{query.isError ? (query.error as Error).message : "Loading settings…"}</p>;
-  }
-
   const prefs = query.data;
   const update = (patch: Partial<AccountSettings>) => {
+    if (!prefs) {
+      return;
+    }
     queryClient.setQueryData(["settings"], { ...prefs, ...patch });
   };
 
   return (
     <div className="flex w-full max-w-3xl flex-col gap-6">
       <div>
-        <h1 className="text-[clamp(1.75rem,2.5vw,2.75rem)] font-semibold">Settings</h1>
+        <h1 className="font-display text-[clamp(1.9rem,2.6vw,2.9rem)] font-medium tracking-tight">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">Defaults for the next upload, and how long files are kept.</p>
       </div>
+      {query.isError ? <p className="text-sm text-destructive">{(query.error as Error).message}</p> : null}
+      {!prefs ? (
+        <div className="space-y-3">
+          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-28 w-full" />
+        </div>
+      ) : null}
+      {prefs ? (
+        <>
       <Card>
         <CardHeader>
           <CardTitle>Default mode</CardTitle>
@@ -144,6 +155,8 @@ export function SettingsView() {
           )}
         </CardContent>
       </Card>
+        </>
+      ) : null}
     </div>
   );
 }

@@ -12,8 +12,9 @@ const LINKS = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export function AppNav({ onNavigate }: { onNavigate?: () => void }) {
-  const pathname = usePathname();
+export function AppNav({ onNavigate, pathname: pathnameOverride }: { onNavigate?: (href: string) => void; pathname?: string }) {
+  const livePath = usePathname();
+  const pathname = pathnameOverride ?? livePath;
   return (
     <nav className="flex flex-col gap-1">
       {LINKS.map((link) => {
@@ -26,10 +27,10 @@ export function AppNav({ onNavigate }: { onNavigate?: () => void }) {
           <Link
             key={link.href}
             href={link.href}
-            onClick={onNavigate}
+            onClick={() => onNavigate?.(link.href)}
             className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2.5 text-base",
-              active ? "bg-sidebar-accent text-sidebar-foreground" : "text-sidebar-foreground/75 hover:bg-sidebar-accent",
+              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base transition-colors duration-200",
+              active ? "bg-sidebar-accent text-sidebar-foreground" : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground",
             )}
           >
             <Icon className="h-4 w-4" />

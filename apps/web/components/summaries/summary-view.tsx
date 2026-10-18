@@ -5,6 +5,7 @@ import { Check, Copy, Loader2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { BackLink } from "@/components/back-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -115,12 +116,8 @@ export function SummaryView({ documentId }: { documentId: string }) {
     <div className="flex w-full flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm text-muted-foreground">
-            <Link href={`/documents/${documentId}`} className="hover:underline">
-              Document
-            </Link>
-          </p>
-          <h1 className="text-[clamp(1.75rem,2.5vw,2.75rem)] font-semibold">Summary</h1>
+          <BackLink href={`/documents/${documentId}`}>Document</BackLink>
+          <h1 className="font-display text-[clamp(1.9rem,2.6vw,2.9rem)] font-medium tracking-tight">Summary</h1>
         </div>
         <div className="flex flex-wrap gap-2">
           {record?.status === "SUMMARIZED" && record.markdown ? (

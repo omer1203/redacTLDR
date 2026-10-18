@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -170,7 +171,10 @@ function Notice({ documentId, text }: { documentId: string; text: string }) {
       <CardContent className="flex flex-col items-start gap-4 py-8 text-sm">
         <p>{text}</p>
         <Button variant="outline" asChild>
-          <Link href={`/documents/${documentId}`}>Back to document</Link>
+          <Link href={`/documents/${documentId}`}>
+            <ArrowLeft className="h-4 w-4" />
+            Back to document
+          </Link>
         </Button>
       </CardContent>
     </Card>

@@ -28,7 +28,7 @@ export function DashboardView() {
   return (
     <div className="flex w-full flex-col gap-8">
       <div>
-        <h1 className="text-[clamp(1.75rem,2.5vw,2.75rem)] font-semibold">Documents</h1>
+        <h1 className="font-display text-[clamp(1.9rem,2.6vw,2.9rem)] font-medium tracking-tight">Documents</h1>
         <p className="mt-1 text-sm text-muted-foreground">Upload a PDF, then open it when it is ready for review.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">

@@ -1,32 +1,104 @@
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
+import { useQueryClient } from "@tanstack/react-query";
 import { Menu } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
+import { ActivityView } from "@/components/activity-view";
 import { AppNav } from "@/components/app-shell/nav";
 import { NotificationBell } from "@/components/app-shell/notification-bell";
+import { DashboardView } from "@/components/documents/dashboard-view";
+import { SettingsView } from "@/components/settings-view";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Wordmark } from "@/components/wordmark";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { listAuditEvents } from "@/lib/api/audit";
+import { getSettings } from "@/lib/api/settings";
+import { useApiToken } from "@/lib/review/token";
+
+const WARM_ROUTES = ["/dashboard", "/activity", "/settings"];
+
+function screenFor(href: string) {
+  if (href.startsWith("/activity")) {
+    return <ActivityView />;
+  }
+  if (href.startsWith("/settings")) {
+    return <SettingsView />;
+  }
+  if (href.startsWith("/dashboard")) {
+    return <DashboardView />;
+  }
+  return null;
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+  const router = useRouter();
+  const pathname = usePathname();
+  const queryClient = useQueryClient();
+  const getToken = useApiToken();
   const [open, setOpen] = useState(false);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPendingHref(null);
+  }, [pathname]);
+
+  useEffect(() => {
+    for (const href of WARM_ROUTES) {
+      router.prefetch(href);
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await getToken();
+        if (cancelled) {
+          return;
+        }
+        await Promise.all([
+          queryClient.prefetchQuery({
+            queryKey: ["audit", ""],
+            queryFn: () => listAuditEvents(token),
+            staleTime: 60_000,
+          }),
+          queryClient.prefetchQuery({
+            queryKey: ["settings"],
+            queryFn: () => getSettings(token),
+            staleTime: 60_000,
+          }),
+        ]);
+      } catch {
+        // The screen fetches again when it opens.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken, queryClient, router]);
+
+  const shown = pendingHref && pendingHref !== pathname ? pendingHref : pathname;
+  const immediate = pendingHref && pendingHref !== pathname ? screenFor(pendingHref) : null;
+
+  const go = (href: string) => {
+    setPendingHref(href);
+    setOpen(false);
+  };
 
   return (
-    <div className="min-h-screen bg-background md:grid md:grid-cols-[minmax(240px,18vw)_1fr]">
+    <div className="min-h-screen bg-background md:grid md:grid-cols-[minmax(240px,17rem)_1fr]">
       <aside className="hidden flex-col bg-sidebar text-sidebar-foreground md:flex">
-        <Link href="/dashboard" className="px-6 py-6 text-2xl font-semibold tracking-tight">
-          RedacTLDR
-        </Link>
+        <div className="px-5 py-6" onClick={() => go("/dashboard")}>
+          <Wordmark href="/dashboard" />
+        </div>
         <div className="px-3">
-          <AppNav />
+          <AppNav pathname={shown} onNavigate={go} />
         </div>
       </aside>
-      <div className="flex min-h-screen flex-col">
-        <header className="flex h-16 items-center justify-between border-b px-[clamp(1rem,2vw,2rem)]">
+      <div className="surface-glow flex min-h-screen flex-col">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-background/80 px-[clamp(1rem,2vw,2rem)] backdrop-blur-md">
           <div className="flex items-center gap-2">
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
@@ -35,13 +107,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Button>
               </SheetTrigger>
               <SheetContent>
-                <Link href="/dashboard" className="text-lg font-semibold" onClick={() => setOpen(false)}>
-                  RedacTLDR
-                </Link>
-                <AppNav onNavigate={() => setOpen(false)} />
+                <div onClick={() => go("/dashboard")}>
+                  <Wordmark href="/dashboard" />
+                </div>
+                <AppNav pathname={shown} onNavigate={go} />
               </SheetContent>
             </Sheet>
-            <span className="text-sm font-medium md:hidden">RedacTLDR</span>
           </div>
           <div className="flex items-center gap-2">
             <NotificationBell />
@@ -49,7 +120,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {clerkEnabled ? <UserButton /> : <span className="text-xs text-muted-foreground">Local demo</span>}
           </div>
         </header>
-        <main className="flex-1 px-[clamp(1.25rem,3vw,3.5rem)] py-8">{children}</main>
+        <main className="flex-1 px-[clamp(1.25rem,3vw,3.5rem)] py-8">{immediate ?? children}</main>
       </div>
     </div>
   );

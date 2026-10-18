@@ -25,6 +25,9 @@ services:
       CLERK_JWT_TEMPLATE: ${CLERK_JWT_TEMPLATE:-redactldr-api}
     ports:
       - "3000:3000"
+    # No healthcheck here. Next.js dev does not listen until it has booted, and
+    # the first request can take longer than a healthcheck timeout. Waiting on
+    # it made `scripts/up.sh` look stuck. The API check is the one that matters.
     depends_on:
       - api
 
@@ -56,9 +59,23 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     ports:
       - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/health')",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # Celery worker service: background detect/export/summary jobs.
   worker:
@@ -87,8 +104,10 @@ services:
       OTEL_SERVICE_NAME: redactldr-worker
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # Celery beat: hourly soft-delete of uploads that never finished.
   beat:
@@ -102,8 +121,10 @@ services:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_BACKEND_URL: ${CELERY_BACKEND_URL:-redis://redis:6379/1}
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # PostgreSQL primary relational datastore.
   postgres:
@@ -118,11 +139,21 @@ services:
     # Persist DB data across container restarts.
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d redactldr"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
   # Redis broker/result backend for Celery.
   redis:
     image: redis:7-alpine
     container_name: redactldr-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
   # OpenTelemetry collector receives OTLP traces/metrics from services.
   otel-collector:

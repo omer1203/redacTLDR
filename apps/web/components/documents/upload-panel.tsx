@@ -108,8 +108,8 @@ export function UploadPanel() {
         <CardDescription>Drag in one or more PDFs. Progress is the bytes actually sent.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {DOCUMENT_MODES.map((item) => {
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
+          {DOCUMENT_MODES.map((item, index) => {
             const Icon = item.icon;
             const selected = mode === item.id;
             return (
@@ -118,7 +118,8 @@ export function UploadPanel() {
                 type="button"
                 onClick={() => setMode(item.id)}
                 className={cn(
-                  "rounded-lg border p-3 text-left transition-colors",
+                  "rounded-lg border p-3 text-left transition-[color,background-color,border-color,transform] duration-200 md:col-span-2",
+                  index === 3 && "md:col-start-2",
                   selected ? "border-primary bg-accent" : "hover:bg-muted",
                 )}
               >

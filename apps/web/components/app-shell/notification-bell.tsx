@@ -26,6 +26,7 @@ export function NotificationBell() {
     queryKey: ["notifications"],
     queryFn: async () => listNotifications(await getToken()),
     refetchInterval: 8000,
+    refetchIntervalInBackground: false,
   });
   const mark = useMutation({
     mutationFn: async (ids: string[] | "all") => markNotificationsRead(await getToken(), ids),
