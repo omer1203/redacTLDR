@@ -21,7 +21,7 @@ LOCAL_DATABASE_URL="postgresql+psycopg://postgres:postgres@postgres:5432/redactl
 
 usage() {
   cat <<'EOF'
-Usage: bash scripts/dev-up.sh [options]
+Usage: bash scripts/up.sh [options]
 
 Options:
   --build              Rebuild local images before starting.

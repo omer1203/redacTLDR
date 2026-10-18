@@ -75,7 +75,7 @@ bash "${SCRIPT_DIR}/verify-local-s3.sh"
 
 if [[ "${RESTART}" == "true" ]]; then
   echo "Recreating api and worker containers..."
-  # Match dev-up.sh: local Postgres unless caller already exported remote URLs.
+  # Match up.sh: local Postgres unless caller already exported remote URLs.
   export DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/redactldr}"
   export MIGRATION_DATABASE_URL="${MIGRATION_DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/redactldr}"
   docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --force-recreate api worker

@@ -73,8 +73,11 @@ samples/
 **/*.log
 ops/compose/*.schema.json
 
+# Planning notes, status tracking, and interview prep stay on this machine
+docs/
+
 # Local process tracking
-docs/PROCESS_TRACKER.local.md
+*.pid
 
 # Additional caches
 *.cache
