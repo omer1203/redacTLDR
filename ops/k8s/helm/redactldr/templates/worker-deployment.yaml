@@ -12,9 +12,22 @@ spec:
       labels:
         app: redactldr-worker
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: worker
           image: {{ .Values.image.worker }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           env:
             - name: AWS_REGION
               value: {{ .Values.env.AWS_REGION | quote }}
@@ -22,3 +35,6 @@ spec:
               value: {{ .Values.env.CELERY_BROKER_URL | quote }}
             - name: CELERY_BACKEND_URL
               value: {{ .Values.env.CELERY_BACKEND_URL | quote }}
+      volumes:
+        - name: tmp
+          emptyDir: {}

@@ -7,16 +7,19 @@ WORKDIR /app
 # Worker runtime dependencies only; keep API/dev packages out of this image.
 COPY requirements-worker.txt .
 
-RUN pip install --no-cache-dir -r requirements-worker.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools \
+    && pip install --no-cache-dir -r requirements-worker.txt \
+    && useradd --system --uid 10001 --no-create-home app
 
 # Copy worker/API shared source tree.
 COPY . .
+USER app
 
-# Ensure `services.*` imports resolve at runtime.
-ENV PYTHONPATH=/app
-
-# No HTTP service exposed by worker; this is informational only.
-EXPOSE 8000
+# Solo pool is set in compose. Bytecode stays out of the writable layer.
+ENV PYTHONPATH=/app \
+    HOME=/tmp \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 # Listen on `default` (API producer) and `celery` (older backlog messages).
 CMD ["celery", "-A", "services.worker.app.celery_app.celery", "worker", "-Q", "default,celery", "--loglevel=INFO"]

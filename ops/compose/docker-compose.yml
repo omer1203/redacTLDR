@@ -5,13 +5,21 @@ services:
     container_name: redactldr-web
     working_dir: /workspace
     # Monorepo workspace command; runs dev server with hot reload.
-    command: sh -c "npm run dev --workspace @redactldr/web"
+    # Turbopack compiles routes in memory. node_modules and .next stay in
+    # volumes so Docker Desktop is not reading those trees across the Mac mount,
+    # which is what made every click wait several seconds.
+    # Skip install when the named volume already has the workspace. A full
+    # npm install on every boot holds port 3000 closed for minutes.
+    command: sh -c "if [ ! -x node_modules/.bin/next ]; then npm install; fi && npm run dev --workspace @redactldr/web -- --hostname 0.0.0.0"
+    mem_limit: 1536m
     volumes:
-      # Mount whole repo so edits reflect immediately inside container.
       - ../../:/workspace
+      - web_node_modules:/workspace/node_modules
+      - web_next:/workspace/apps/web/.next
     environment:
       # Web runtime points at API container via host-exposed port.
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
       CLERK_JWT_TEMPLATE: ${CLERK_JWT_TEMPLATE:-redactldr-api}
@@ -26,6 +34,7 @@ services:
       context: ../../
       dockerfile: ops/docker/api.Dockerfile
     container_name: redactldr-api
+    mem_limit: 512m
     environment:
       # Local defaults allow zero-config bootstrap for development.
       ENVIRONMENT: ${ENVIRONMENT:-local}
@@ -57,6 +66,7 @@ services:
       context: ../../
       dockerfile: ops/docker/worker.Dockerfile
     container_name: redactldr-worker
+    mem_limit: 768m
     # Local development is latency-oriented, not throughput-oriented. The solo
     # pool avoids an extra prefork child process and keeps memory predictable.
     command: ["celery", "-A", "services.worker.app.celery_app.celery", "worker", "-Q", "default,celery", "--loglevel=INFO", "--pool=solo", "--concurrency=1"]
@@ -69,6 +79,8 @@ services:
       S3_BUCKET_ORIGINALS: ${S3_BUCKET_ORIGINALS:-redactldr-originals-dev}
       S3_BUCKET_DOWNLOADS: ${S3_BUCKET_DOWNLOADS:-redactldr-downloads-dev}
       BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-anthropic.claude-3-haiku-20240307-v1:0}
+      # R3: keep false so detections store masked values only.
+      STORE_RAW_DETECTIONS: ${STORE_RAW_DETECTIONS:-false}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
@@ -128,3 +140,6 @@ services:
 volumes:
   # Named volume for postgres durable local state.
   postgres_data:
+  # Kept off the Mac bind mount. Next and npm are much faster this way.
+  web_node_modules:
+  web_next:

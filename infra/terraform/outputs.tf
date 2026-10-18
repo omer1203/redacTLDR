@@ -1,11 +1,13 @@
-output "ecs_cluster_name" {
-  value = aws_ecs_cluster.main.name
-}
-
-output "s3_originals_bucket" {
-  value = aws_s3_bucket.originals.bucket
-}
-
-output "s3_downloads_bucket" {
-  value = aws_s3_bucket.downloads.bucket
-}
+output "ecs_cluster_name" { value = module.ecs.cluster_name }
+output "api_service_name" { value = module.ecs.api_service_name }
+output "worker_service_name" { value = module.ecs.worker_service_name }
+output "beat_service_name" { value = module.ecs.beat_service_name }
+output "migrate_task_definition" { value = module.ecs.migrate_task_definition }
+output "private_subnet_ids" { value = module.network.private_subnet_ids }
+output "api_security_group_id" { value = module.network.api_security_group_id }
+output "s3_originals_bucket" { value = module.storage.originals_bucket }
+output "s3_downloads_bucket" { value = module.storage.downloads_bucket }
+output "api_repository_url" { value = module.ecr.api_url }
+output "worker_repository_url" { value = module.ecr.worker_url }
+output "github_deploy_role_arn" { value = module.iam.github_deploy_role_arn }
+output "alb_dns_name" { value = module.alb.dns_name }

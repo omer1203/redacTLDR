@@ -8,13 +8,19 @@ WORKDIR /app
 # Install API runtime dependencies first to leverage Docker layer caching.
 COPY requirements-api.txt .
 
-RUN pip install --no-cache-dir -r requirements-api.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools \
+    && pip install --no-cache-dir -r requirements-api.txt \
+    && useradd --system --uid 10001 --no-create-home app
 
 # Copy monorepo sources (API imports from package-qualified paths).
 COPY . .
+USER app
 
-# keep repo root importable for package-qualified imports
-ENV PYTHONPATH=/app
+# One process. Bytecode stays out of the image layer and logs stay unbuffered.
+ENV PYTHONPATH=/app \
+    HOME=/tmp \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 # FastAPI/uvicorn listens on 8000 in this image.
 EXPOSE 8000

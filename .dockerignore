@@ -21,3 +21,10 @@
 **/.env
 **/.env.*
 **/*.log
+# The API and worker images do not serve the web app or the docs.
+apps
+docs
+infra
+samples
+**/tests
+**/*_test.py

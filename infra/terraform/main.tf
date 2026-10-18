@@ -1,116 +1,91 @@
-# Baseline infrastructure scaffold for AWS deployment direction.
-terraform {
-  # Pin Terraform and provider versions for reproducible plans.
-  required_version = ">= 1.6.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-provider "aws" {
-  # Region selected via input variable (see variables.tf).
-  region = var.aws_region
-}
-
 locals {
-  # Shared naming prefix for environment-specific resource separation.
   name_prefix = "redactldr-${var.environment}"
+  enable_dns  = var.domain_name != "" && var.route53_zone_id != ""
 }
 
-resource "aws_s3_bucket" "originals" {
-  # Stores uploaded source/original documents.
-  bucket = "${local.name_prefix}-originals"
+module "network" {
+  source      = "./modules/network"
+  name_prefix = local.name_prefix
+  vpc_cidr    = var.vpc_cidr
 }
 
-resource "aws_s3_bucket" "downloads" {
-  # Stores generated export artifacts for client download.
-  bucket = "${local.name_prefix}-downloads"
+module "storage" {
+  source          = "./modules/storage"
+  name_prefix     = local.name_prefix
+  allowed_origins = var.s3_browser_allowed_origins
 }
 
-resource "aws_s3_bucket_public_access_block" "originals" {
-  bucket = aws_s3_bucket.originals.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+module "ecr" {
+  source      = "./modules/ecr"
+  name_prefix = local.name_prefix
 }
 
-resource "aws_s3_bucket_public_access_block" "downloads" {
-  bucket = aws_s3_bucket.downloads.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+module "secrets" {
+  source      = "./modules/secrets"
+  name_prefix = local.name_prefix
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "originals" {
-  bucket = aws_s3_bucket.originals.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
+module "iam" {
+  source                      = "./modules/iam"
+  name_prefix                 = local.name_prefix
+  originals_bucket_arn        = module.storage.originals_arn
+  downloads_bucket_arn        = module.storage.downloads_arn
+  kms_key_arn                 = module.storage.kms_key_arn
+  secret_arns                 = module.secrets.arns
+  github_repository           = var.github_repository
+  create_github_oidc_provider = var.create_github_oidc_provider
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "downloads" {
-  bucket = aws_s3_bucket.downloads.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
+module "elasticache" {
+  source            = "./modules/elasticache"
+  name_prefix       = local.name_prefix
+  subnet_ids        = module.network.private_subnet_ids
+  security_group_id = module.network.redis_security_group_id
 }
 
-resource "aws_s3_bucket_cors_configuration" "originals" {
-  bucket = aws_s3_bucket.originals.id
-
-  cors_rule {
-    allowed_headers = ["*"]
-    allowed_methods = ["PUT", "GET", "HEAD"]
-    allowed_origins = var.s3_browser_allowed_origins
-    expose_headers  = ["ETag"]
-    max_age_seconds = 3600
-  }
+module "alb" {
+  source            = "./modules/alb"
+  name_prefix       = local.name_prefix
+  vpc_id            = module.network.vpc_id
+  public_subnet_ids = module.network.public_subnet_ids
+  security_group_id = module.network.alb_security_group_id
+  domain_name       = var.domain_name
+  route53_zone_id   = var.route53_zone_id
+  enable_dns        = local.enable_dns
 }
 
-resource "aws_s3_bucket_cors_configuration" "downloads" {
-  bucket = aws_s3_bucket.downloads.id
-
-  cors_rule {
-    allowed_headers = ["*"]
-    allowed_methods = ["GET", "HEAD"]
-    allowed_origins = var.s3_browser_allowed_origins
-    expose_headers  = ["ETag"]
-    max_age_seconds = 3600
-  }
+module "ecs" {
+  source                   = "./modules/ecs"
+  name_prefix              = local.name_prefix
+  aws_region               = var.aws_region
+  environment              = var.environment
+  image_tag                = var.image_tag
+  api_image                = module.ecr.api_url
+  worker_image             = module.ecr.worker_url
+  private_subnet_ids       = module.network.private_subnet_ids
+  api_security_group_id    = module.network.api_security_group_id
+  worker_security_group_id = module.network.worker_security_group_id
+  target_group_arn         = module.alb.target_group_arn
+  execution_role_arn       = module.iam.execution_role_arn
+  api_task_role_arn        = module.iam.api_task_role_arn
+  worker_task_role_arn     = module.iam.worker_task_role_arn
+  secret_arns              = module.secrets.arns
+  originals_bucket         = module.storage.originals_bucket
+  downloads_bucket         = module.storage.downloads_bucket
+  redis_url                = module.elasticache.redis_url
+  api_desired_count        = var.api_desired_count
+  worker_min_count         = var.worker_min_count
+  worker_max_count         = var.worker_max_count
+  log_group_api            = module.observability.api_log_group
+  log_group_worker         = module.observability.worker_log_group
+  cors_allowed_origins     = join(",", var.s3_browser_allowed_origins)
+  bedrock_model_id         = var.bedrock_model_id
 }
 
-resource "aws_ecr_repository" "api" {
-  # Container image repository for API service.
-  name                 = "${local.name_prefix}-api"
-  image_tag_mutability = "MUTABLE"
-}
-
-resource "aws_ecr_repository" "worker" {
-  # Container image repository for worker service.
-  name                 = "${local.name_prefix}-worker"
-  image_tag_mutability = "MUTABLE"
-}
-
-resource "aws_ecr_repository" "web" {
-  # Container image repository for web frontend.
-  name                 = "${local.name_prefix}-web"
-  image_tag_mutability = "MUTABLE"
-}
-
-resource "aws_ecs_cluster" "main" {
-  # Compute cluster placeholder for running services via ECS.
-  name = "${local.name_prefix}-cluster"
+module "observability" {
+  source                  = "./modules/observability"
+  name_prefix             = local.name_prefix
+  alb_arn_suffix          = module.alb.arn_suffix
+  target_group_arn_suffix = module.alb.target_group_arn_suffix
+  aws_region              = var.aws_region
 }

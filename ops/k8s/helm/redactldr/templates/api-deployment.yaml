@@ -12,9 +12,22 @@ spec:
       labels:
         app: redactldr-api
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: api
           image: {{ .Values.image.api }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           ports:
             - containerPort: {{ .Values.service.apiPort }}
           env:
@@ -24,3 +37,6 @@ spec:
               value: {{ .Values.env.CELERY_BROKER_URL | quote }}
             - name: CELERY_BACKEND_URL
               value: {{ .Values.env.CELERY_BACKEND_URL | quote }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
