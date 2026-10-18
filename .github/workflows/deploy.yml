@@ -1,0 +1,98 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# Skipped until the GitHub environment variable AWS_ROLE_ARN is set to the
+# Terraform output github_deploy_role_arn. A push does not deploy before that.
+# A push to main deploys only after CI passes on that commit.
+jobs:
+  deploy:
+    if: ${{ vars.AWS_ROLE_ARN != '' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_API: ${{ vars.ECR_API }}
+      ECR_WORKER: ${{ vars.ECR_WORKER }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_API_SERVICE: ${{ vars.ECS_API_SERVICE }}
+      ECS_WORKER_SERVICE: ${{ vars.ECS_WORKER_SERVICE }}
+      ECS_BEAT_SERVICE: ${{ vars.ECS_BEAT_SERVICE }}
+      ECS_MIGRATE_TASK: ${{ vars.ECS_MIGRATE_TASK }}
+      ECS_SUBNETS: ${{ vars.ECS_SUBNETS }}
+      ECS_SECURITY_GROUP: ${{ vars.ECS_SECURITY_GROUP }}
+      API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push
+        env:
+          SHA: ${{ env.DEPLOY_SHA }}
+        run: |
+          set -euo pipefail
+          docker build -f ops/docker/api.Dockerfile -t "$ECR_API:$SHA" -t "$ECR_API:latest" .
+          docker build -f ops/docker/worker.Dockerfile -t "$ECR_WORKER:$SHA" -t "$ECR_WORKER:latest" .
+          docker push "$ECR_API:$SHA"
+          docker push "$ECR_API:latest"
+          docker push "$ECR_WORKER:$SHA"
+          docker push "$ECR_WORKER:latest"
+
+      - name: SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.ECR_API }}:${{ env.DEPLOY_SHA }}
+          format: spdx-json
+          output-file: sbom-api.spdx.json
+
+      - name: Scan API image
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: ${{ env.ECR_API }}:${{ env.DEPLOY_SHA }}
+          format: table
+          severity: CRITICAL
+          exit-code: "1"
+
+      - name: Run migrations
+        run: |
+          set -euo pipefail
+          task_arn=$(aws ecs run-task \
+            --cluster "$ECS_CLUSTER" \
+            --task-definition "$ECS_MIGRATE_TASK" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$ECS_SUBNETS],securityGroups=[$ECS_SECURITY_GROUP],assignPublicIp=DISABLED}" \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$task_arn"
+          code=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$task_arn" --query 'tasks[0].containers[0].exitCode' --output text)
+          test "$code" = "0"
+
+      - name: Deploy services
+        run: |
+          set -euo pipefail
+          for service in "$ECS_API_SERVICE" "$ECS_WORKER_SERVICE" "$ECS_BEAT_SERVICE"; do
+            aws ecs update-service --cluster "$ECS_CLUSTER" --service "$service" --force-new-deployment >/dev/null
+          done
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_API_SERVICE" "$ECS_WORKER_SERVICE" "$ECS_BEAT_SERVICE"
+
+      - name: Smoke test health
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --retry 5 --retry-delay 5 "$API_HEALTH_URL"
