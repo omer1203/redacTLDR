@@ -108,3 +108,7 @@ Icon
 *.tmp
 *.temp
 *~
+
+# Playwright output
+test-results/
+playwright-report/

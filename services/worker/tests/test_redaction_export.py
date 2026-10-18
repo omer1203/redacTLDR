@@ -313,8 +313,9 @@ def test_pre_r3_detection_without_offsets_uses_bbox_and_skips_the_text_probe() -
     assert report.probes_checked == 0 and report.probes_skipped == 1
 
 
+@pytest.mark.skipif(not (SAMPLES / "resume.pdf").exists(), reason="samples/ is local only and not in the repo")
 def test_sample_resume_golden() -> None:
-    """The committed sample: redact every word containing '@' plus the first line, keep everything else."""
+    """The local sample: redact every word containing '@' plus the first line, keep everything else."""
     pdf = (SAMPLES / "resume.pdf").read_bytes()
     payload = ocr_payload_for(pdf)
     page = payload["pages"][0]
