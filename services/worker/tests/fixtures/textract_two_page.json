@@ -1,0 +1,53 @@
+{
+  "Blocks": [
+    {
+      "BlockType": "PAGE",
+      "Id": "page-1",
+      "Page": 1,
+      "Relationships": [{ "Type": "CHILD", "Ids": ["line-1"] }]
+    },
+    {
+      "BlockType": "LINE",
+      "Id": "line-1",
+      "Page": 1,
+      "Text": "Ada Lovelace",
+      "Geometry": { "BoundingBox": { "Left": 0.1, "Top": 0.2, "Width": 0.3, "Height": 0.02 } },
+      "Relationships": [{ "Type": "CHILD", "Ids": ["word-1", "word-2"] }]
+    },
+    {
+      "BlockType": "WORD",
+      "Id": "word-1",
+      "Page": 1,
+      "Text": "Ada",
+      "Geometry": { "BoundingBox": { "Left": 0.1, "Top": 0.2, "Width": 0.08, "Height": 0.02 } }
+    },
+    {
+      "BlockType": "WORD",
+      "Id": "word-2",
+      "Page": 1,
+      "Text": "Lovelace",
+      "Geometry": { "BoundingBox": { "Left": 0.2, "Top": 0.2, "Width": 0.2, "Height": 0.02 } }
+    },
+    {
+      "BlockType": "PAGE",
+      "Id": "page-2",
+      "Page": 2,
+      "Relationships": [{ "Type": "CHILD", "Ids": ["line-2"] }]
+    },
+    {
+      "BlockType": "LINE",
+      "Id": "line-2",
+      "Page": 2,
+      "Text": "Second",
+      "Geometry": { "BoundingBox": { "Left": 0.1, "Top": 0.1, "Width": 0.2, "Height": 0.02 } },
+      "Relationships": [{ "Type": "CHILD", "Ids": ["word-3"] }]
+    },
+    {
+      "BlockType": "WORD",
+      "Id": "word-3",
+      "Page": 2,
+      "Text": "Second",
+      "Geometry": { "BoundingBox": { "Left": 0.1, "Top": 0.1, "Width": 0.2, "Height": 0.02 } }
+    }
+  ]
+}

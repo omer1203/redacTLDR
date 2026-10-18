@@ -1,0 +1,10 @@
+{
+  "Entities": [
+    { "Score": 0.9998, "Type": "NAME", "BeginOffset": 0, "EndOffset": 8 },
+    { "Score": 0.9999, "Type": "EMAIL", "BeginOffset": 9, "EndOffset": 27 },
+    { "Score": 0.9996, "Type": "PHONE", "BeginOffset": 30, "EndOffset": 44 },
+    { "Score": 0.9993, "Type": "URL", "BeginOffset": 45, "EndOffset": 68 },
+    { "Score": 0.9989, "Type": "ADDRESS", "BeginOffset": 69, "EndOffset": 106 },
+    { "Score": 0.9871, "Type": "DATE_TIME", "BeginOffset": 116, "EndOffset": 120 }
+  ]
+}

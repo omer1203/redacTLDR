@@ -5,30 +5,32 @@ M3: each enqueue creates a `jobs` row; `_update_job_status` moves the *latest*
 row for a `(document_id, job_type)` through PROCESSING / COMPLETED / FAILED so
 the dashboard and ops can see pipeline state without reading Celery only.
 
-Stubs: detection/export/summary still use placeholder logic; they exist to
-exercise status transitions, DB writes, and failure/retry behavior end-to-end.
+OCR (R2) reads the real PDF through Textract. Detection (R3) runs Comprehend
+and custom rules on that OCR text and applies the mode policy. Export (R5)
+removes the selected content and verifies the file before upload. Summary (R6)
+sends the OCR text, with accepted values tokenized when safe mode is on, and
+stores the structured result only after a leak check.
 """
 
 import json
 import logging
-import re
 from datetime import datetime, timedelta
-from uuid import UUID, uuid4
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
+from services.shared.log_json import bind_log_context
 from services.worker.app.celery_app import celery
-from services.worker.app.config import DATABASE_URL
-from services.worker.app.redaction import redact_pdf_bytes
-from services.worker.app.summary import build_summary_payload
+from services.worker.app.db import engine
+from services.worker.app.detect import run_detection_for_document
+from services.worker.app.metrics import stage_timer
+from services.worker.app.detection.models import DetectionError
+from services.worker.app.export import mark_export_failed, run_export
+from services.worker.app.notify import notify
+from services.worker.app.ocr import OcrError, run_ocr_for_document
+from services.worker.app.redaction import ExportError
+from services.worker.app.summary import SummaryError, mark_summary_failed, run_summary
 
-# Raw SQL engine used by worker jobs to update lifecycle state.
-# `pool_pre_ping=True` helps recover stale DB connections in long-lived workers.
-engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
-
-# Placeholder entity matchers for synthetic detection output.
-EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
-PHONE_RE = re.compile(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b")
 logger = logging.getLogger(__name__)
 
 
@@ -37,58 +39,16 @@ def _now_iso() -> str:
     return datetime.utcnow().isoformat() + "Z"
 
 
-_DETECT_DONE_STATUSES = {
+# Statuses that mean the pipeline has already finished OCR + detect.
+# DETECTED is the pre-R2 name; the migration rewrites it to READY_FOR_REVIEW.
+_PIPELINE_DONE_STATUSES = {
+    "READY_FOR_REVIEW",
     "DETECTED",
     "EXPORT_QUEUED",
     "EXPORTED",
     "SUMMARY_QUEUED",
     "SUMMARIZED",
 }
-
-
-def _insert_detection(document_id: str, entity_type: str, value: str, confidence: float) -> None:
-    """
-    Insert one detection row.
-
-    Uses SQL text for explicit control over JSONB casting and to keep worker
-    dependencies light (no ORM session lifecycle here).
-    """
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                INSERT INTO detections
-                (id, document_id, entity_type, detected_text, page_number, block_ref, confidence, bbox, source, accepted, created_at)
-                VALUES
-                (
-                  CAST(:id AS UUID),
-                  CAST(:document_id AS UUID),
-                  CAST(:entity_type AS VARCHAR),
-                  CAST(:detected_text AS TEXT),
-                  CAST(:page_number AS INTEGER),
-                  CAST(:block_ref AS VARCHAR),
-                  CAST(:confidence AS DOUBLE PRECISION),
-                  CAST(:bbox AS JSONB),
-                  CAST(:source AS VARCHAR),
-                  CAST(:accepted AS BOOLEAN),
-                  CAST(:created_at AS TIMESTAMP)
-                )
-                """
-            ),
-            {
-                "id": str(uuid4()),
-                "document_id": document_id,
-                "entity_type": entity_type,
-                "detected_text": value,
-                "page_number": 1,
-                "block_ref": "block-1",
-                "confidence": confidence,
-                "bbox": json.dumps({"x": 0.1, "y": 0.1, "width": 0.2, "height": 0.03}),
-                "source": "custom_rule",
-                "accepted": True,
-                "created_at": datetime.utcnow(),
-            },
-        )
 
 
 def _update_document_status(document_id: str, status: str) -> None:
@@ -108,18 +68,51 @@ def _update_document_status(document_id: str, status: str) -> None:
 
 
 def _latest_document_row(document_id: str):
-    """Fetch minimal document fields needed by worker tasks."""
+    """Fetch the document fields worker tasks branch on. No OCR text is selected."""
     with engine.begin() as conn:
         return conn.execute(
             text(
                 """
-                SELECT id, mode, safe_mode, filename, status, deleted_at
+                SELECT id, user_id, mode, safe_mode, filename, status, deleted_at, ocr_s3_key, processing_stage
                 FROM documents
                 WHERE id=CAST(:document_id AS UUID)
                 """
             ),
             {"document_id": document_id},
         ).mappings().first()
+
+
+def _update_document_progress(
+    document_id: str,
+    status: str,
+    *,
+    stage: str | None = None,
+    error_code: str | None = None,
+    error_message: str | None = None,
+) -> None:
+    """Set lifecycle status, the active stage, and a user-safe error pair."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE documents
+                SET status=CAST(:status AS VARCHAR),
+                    processing_stage=CAST(:stage AS VARCHAR),
+                    error_code=CAST(:error_code AS VARCHAR),
+                    error_message=CAST(:error_message AS TEXT),
+                    updated_at=CAST(:updated_at AS TIMESTAMP)
+                WHERE id=CAST(:document_id AS UUID)
+                """
+            ),
+            {
+                "status": status,
+                "stage": stage,
+                "error_code": error_code,
+                "error_message": error_message,
+                "updated_at": datetime.utcnow(),
+                "document_id": document_id,
+            },
+        )
 
 
 def _update_job_status(document_id: str, job_type: str, status: str, error: str | None = None, result: dict | None = None) -> None:
@@ -172,189 +165,261 @@ def _update_job_status(document_id: str, job_type: str, status: str, error: str 
         )
 
 
-@celery.task(name="detect_job", bind=True, max_retries=3)
-def detect_job(self, document_id: str, user_id: str) -> dict:
-    """
-    M3 detection task stub with custom rules.
+def _fail_process(document_id: str, code: str, message: str, *, stage: str | None, job_type: str = "process") -> dict:
+    """Record a terminal pipeline failure. `message` must not contain document text.
 
-    Real Textract + Comprehend integration will replace this placeholder logic.
+    `stage` stays set so the document page can mark the step that stopped.
     """
+    safe = message[:500]
+    _update_document_progress(document_id, "FAILED", stage=stage, error_code=code, error_message=safe)
+    _update_job_status(document_id, job_type, "FAILED", error=f"{code}: {safe}")
+    logger.error("pipeline failed document_id=%s job_type=%s code=%s stage=%s", document_id, job_type, code, stage)
+    failed = _latest_document_row(document_id)
+    if failed:
+        notify(failed["user_id"], document_id, "document.failed", f"{failed['filename']} could not be processed")
+    return {"ok": False, "document_id": document_id, "error": code}
+
+
+def _safe_error_text(exc: Exception) -> str:
+    """Error text for the UI and job row.
+
+    SQLAlchemy messages echo bound parameters, which can include detection
+    values, so only the driver error class is kept for those.
+    """
+    if isinstance(exc, SQLAlchemyError):
+        original = getattr(exc, "orig", None)
+        return f"{exc.__class__.__name__}: {(original or exc).__class__.__name__}"
+    return f"{exc.__class__.__name__}: {exc}"
+
+
+def _retry_countdown(retries: int) -> int:
+    return min(60, 5 * (2 ** retries))
+
+
+def _run_stages(document_id: str, row) -> dict:
+    """OCR (skipped when its JSON is stored), then detection, then READY_FOR_REVIEW.
+
+    Returns the detection counts for the job row.
+    """
+    if row["ocr_s3_key"]:
+        logger.info("pipeline ocr already stored document_id=%s", document_id)
+    else:
+        _update_document_progress(document_id, "PROCESSING", stage="ocr")
+        with stage_timer("ocr"):
+            run_ocr_for_document(document_id)
+
+    _update_document_progress(document_id, "PROCESSING", stage="detect")
+    with stage_timer("detect"):
+        detections = run_detection_for_document(document_id)
+    _update_document_progress(document_id, "READY_FOR_REVIEW", stage=None)
+    return detections
+
+
+def _run_pipeline_task(task, document_id: str, job_type: str) -> dict:
+    """Shared body of `process_document` and the legacy `detect_job`.
+
+    Typed stage errors carry a user-safe message and a retryable flag. Anything
+    else is retried as a transient failure, then recorded with its class name.
+    """
+    task_name = task.name
     try:
-        _update_job_status(document_id, "detect", "PROCESSING")
-        # Guard against stale/missing document references.
+        _update_job_status(document_id, job_type, "PROCESSING")
         row = _latest_document_row(document_id)
         if not row or row["deleted_at"] is not None:
-            logger.warning("detect_job missing document_id=%s", document_id)
+            logger.warning("%s missing document_id=%s", task_name, document_id)
             return {"ok": False, "error": "missing document"}
-        if row["status"] in _DETECT_DONE_STATUSES:
-            _update_job_status(document_id, "detect", "COMPLETED", result={"ok": True, "skipped": True})
-            logger.info("detect_job skipped document_id=%s status=%s", document_id, row["status"])
+        if row["status"] in _PIPELINE_DONE_STATUSES:
+            _update_job_status(document_id, job_type, "COMPLETED", result={"ok": True, "skipped": True})
+            logger.info("%s skipped document_id=%s status=%s", task_name, document_id, row["status"])
             return {"ok": True, "document_id": document_id, "skipped": True}
 
-        # Synthetic sample text lets us exercise regex + DB insertion behavior.
-        sample_text = f"Contact {user_id}@example.com or 212-555-0199 for {row['filename']}."
-        for match in EMAIL_RE.finditer(sample_text):
-            _insert_detection(document_id, "EMAIL", match.group(0), 0.91)
-        for match in PHONE_RE.finditer(sample_text):
-            _insert_detection(document_id, "PHONE", match.group(0), 0.87)
-
-        # Mark machine detection complete.
-        _update_document_status(document_id, "DETECTED")
-        _update_job_status(document_id, "detect", "COMPLETED", result={"ok": True})
-        logger.info("detect_job completed document_id=%s", document_id)
+        detections = _run_stages(document_id, row)
+        _update_job_status(document_id, job_type, "COMPLETED", result={"ok": True, "detections": detections})
+        logger.info("%s completed document_id=%s", task_name, document_id)
+        notify(row["user_id"], document_id, "document.ready", f"{row['filename']} is ready for review")
         return {"ok": True, "document_id": document_id, "finished_at": _now_iso()}
-    except Exception as exc:  # noqa: BLE001
-        if self.request.retries < self.max_retries:
-            countdown = min(60, 5 * (2 ** self.request.retries))
+    except (OcrError, DetectionError) as exc:
+        stage = "ocr" if isinstance(exc, OcrError) else "detect"
+        if exc.retryable and task.request.retries < task.max_retries:
             logger.warning(
-                "detect_job retry document_id=%s attempt=%s error=%s",
+                "%s retry document_id=%s code=%s stage=%s attempt=%s",
+                task_name,
                 document_id,
-                self.request.retries + 1,
+                exc.code,
+                stage,
+                task.request.retries + 1,
+            )
+            raise task.retry(exc=exc, countdown=_retry_countdown(task.request.retries))
+        return _fail_process(document_id, exc.code, exc.message, stage=stage, job_type=job_type)
+    except Exception as exc:  # noqa: BLE001
+        if task.request.retries < task.max_retries:
+            logger.warning(
+                "%s retry document_id=%s attempt=%s error=%s",
+                task_name,
+                document_id,
+                task.request.retries + 1,
                 exc.__class__.__name__,
             )
-            raise self.retry(exc=exc, countdown=countdown)
-        _update_document_status(document_id, "FAILED")
-        _update_job_status(document_id, "detect", "FAILED", error=f"{exc.__class__.__name__}: {exc}")
-        logger.exception("detect_job failed document_id=%s", document_id)
-        return {"ok": False, "document_id": document_id, "error": "detect_job failed"}
+            raise task.retry(exc=exc, countdown=_retry_countdown(task.request.retries))
+        failed_stage = "detect"
+        latest = _latest_document_row(document_id)
+        if latest and latest["processing_stage"] == "ocr":
+            failed_stage = "ocr"
+        return _fail_process(document_id, "PROCESS_FAILED", _safe_error_text(exc), stage=failed_stage, job_type=job_type)
+
+
+@celery.task(name="process_document", bind=True, max_retries=3)
+def process_document(self, document_id: str, user_id: str) -> dict:
+    """Run OCR, then detection with the mode policy, then mark the document ready.
+
+    Each stage is skipped or replaced when its output is already stored. A retry
+    after a Textract start resumes that job instead of starting a second one
+    (`run_ocr_for_document`); detection replaces its rows (`replace_detections`).
+    `user_id` stays in the signature because the API enqueues it.
+    """
+    with bind_log_context(document_id=document_id, job_id=self.request.id or ""):
+        return _run_pipeline_task(self, document_id, "process")
+
+
+@celery.task(name="detect_job", bind=True, max_retries=3)
+def detect_job(self, document_id: str, user_id: str) -> dict:
+    """Legacy queue entry from before R2.
+
+    New uploads enqueue `process_document`. A message already on the broker
+    runs the same pipeline and records progress on its `detect` job row.
+    """
+    with bind_log_context(document_id=document_id, job_id=self.request.id or ""):
+        return _run_pipeline_task(self, document_id, "detect")
+
+
+def _fail_export(document_id: str, export_id: str | None, code: str, message: str, *, job_error: str) -> dict:
+    """Terminal export failure. The document stays reviewable; only the export row is FAILED."""
+    mark_export_failed(document_id, export_id, code, message)
+    _update_job_status(document_id, "export", "FAILED", error=job_error[:500])
+    logger.error("export_job failed document_id=%s export_id=%s code=%s", document_id, export_id, code)
+    return {"ok": False, "document_id": document_id, "export_id": export_id, "error": code}
 
 
 @celery.task(name="export_job", bind=True, max_retries=3)
-def export_job(self, document_id: str, user_id: str) -> dict:
-    """
-    M5 export task stub.
+def export_job(self, document_id: str, user_id: str, export_id: str | None = None) -> dict:
+    """Build the redacted PDF for one `exports` row (R5; see `services/worker/app/export.py`).
 
-    Current implementation exercises true-redaction library path by rewriting
-    synthetic bytes. Real implementation should fetch source PDF and apply
-    review-approved coordinates.
+    `export_id` is optional so messages queued before R5 still run; they use
+    the newest export row. `user_id` stays in the signature because the API
+    enqueues it. Verification failures are not retried: the same input gives
+    the same output.
     """
+    with bind_log_context(document_id=document_id, job_id=self.request.id or ""):
+        return _export_job(self, document_id, export_id)
+
+
+def _export_job(self, document_id: str, export_id: str | None) -> dict:
     try:
         _update_job_status(document_id, "export", "PROCESSING")
-        row = _latest_document_row(document_id)
-        if not row or row["deleted_at"] is not None:
-            logger.warning("export_job missing document_id=%s", document_id)
-            return {"ok": False, "error": "missing document"}
-        if row["status"] == "EXPORTED":
-            _update_job_status(document_id, "export", "COMPLETED", result={"ok": True, "skipped": True})
-            logger.info("export_job skipped document_id=%s", document_id)
-            return {"ok": True, "document_id": document_id, "skipped": True}
-
-        # Placeholder PDF content to validate redaction pipeline execution path.
-        fake_pdf = b"%PDF-1.4\n% redactldr placeholder\n"
-        redacted = redact_pdf_bytes(fake_pdf, [{"x": 0.1, "y": 0.1, "width": 0.3, "height": 0.04}])
-        export_key = f"exports/{user_id}/{document_id}.pdf"
-        with engine.begin() as conn:
-            # Update the newest export row for this document as completed.
-            conn.execute(
-                text(
-                    """
-                    UPDATE exports
-                    SET status=CAST('EXPORTED' AS VARCHAR),
-                        s3_key=CAST(:s3_key AS VARCHAR)
-                    WHERE id=(
-                      SELECT id FROM exports
-                      WHERE document_id=CAST(:document_id AS UUID)
-                      ORDER BY created_at DESC
-                      LIMIT 1
-                    )
-                    """
-                ),
-                {"s3_key": export_key, "document_id": document_id},
+        with stage_timer("export"):
+            result = run_export(document_id, export_id)
+        _update_job_status(document_id, "export", "COMPLETED", result=result)
+        logger.info("export_job completed document_id=%s export_id=%s", document_id, export_id)
+        return {"ok": True, "document_id": document_id, "export_id": export_id, "finished_at": _now_iso()}
+    except ExportError as exc:
+        if exc.retryable and self.request.retries < self.max_retries:
+            logger.warning(
+                "export_job retry document_id=%s code=%s attempt=%s", document_id, exc.code, self.request.retries + 1
             )
-        # Reflect completion on parent document lifecycle state.
-        _update_document_status(document_id, "EXPORTED")
-        _update_job_status(document_id, "export", "COMPLETED", result={"ok": True, "s3Key": export_key})
-        logger.info("export_job completed document_id=%s", document_id)
-        return {"ok": True, "document_id": document_id, "bytes": len(redacted), "s3_key": export_key}
+            raise self.retry(exc=exc, countdown=_retry_countdown(self.request.retries))
+        return _fail_export(document_id, export_id, exc.code, exc.message, job_error=f"{exc.code}: {exc.message}")
     except Exception as exc:  # noqa: BLE001
         if self.request.retries < self.max_retries:
-            countdown = min(60, 5 * (2 ** self.request.retries))
             logger.warning(
                 "export_job retry document_id=%s attempt=%s error=%s",
                 document_id,
                 self.request.retries + 1,
                 exc.__class__.__name__,
             )
-            raise self.retry(exc=exc, countdown=countdown)
-        _update_document_status(document_id, "FAILED")
-        _update_job_status(document_id, "export", "FAILED", error="export_job failed")
-        logger.exception("export_job failed document_id=%s", document_id)
-        return {"ok": False, "document_id": document_id, "error": "export_job failed"}
+            raise self.retry(exc=exc, countdown=_retry_countdown(self.request.retries))
+        return _fail_export(
+            document_id,
+            export_id,
+            "EXPORT_FAILED",
+            "The export could not be built. You can try again.",
+            job_error=_safe_error_text(exc),
+        )
+
+
+def _fail_summary(document_id: str, summary_id: str | None, code: str, message: str, *, job_error: str) -> dict:
+    """Terminal summary failure. The document stays reviewable; only the summary row is FAILED."""
+    mark_summary_failed(document_id, summary_id, code, message)
+    _update_job_status(document_id, "summary", "FAILED", error=job_error[:500])
+    logger.error("summary_job failed document_id=%s summary_id=%s code=%s", document_id, summary_id, code)
+    return {"ok": False, "document_id": document_id, "summary_id": summary_id, "error": code}
 
 
 @celery.task(name="summary_job", bind=True, max_retries=3)
-def summary_job(self, document_id: str, user_id: str, include_markdown: bool = True) -> dict:
-    """
-    M6 summary task stub.
+def summary_job(self, document_id: str, user_id: str, include_markdown: bool = True, summary_id: str | None = None) -> dict:
+    """Build one summary (R6; see `services/worker/app/summary/run.py`).
 
-    This task builds schema-conformant payloads and stores citations/confidence.
+    `summary_id` is optional so messages queued before R6 still run; they use
+    the newest summary row. A leak or a schema failure is not retried.
     """
+    with bind_log_context(document_id=document_id, job_id=self.request.id or ""):
+        return _summary_job(self, document_id, include_markdown, summary_id)
+
+
+def _summary_job(self, document_id: str, include_markdown: bool, summary_id: str | None) -> dict:
     try:
         _update_job_status(document_id, "summary", "PROCESSING")
-        # Fetch mode/safe-mode because summary shape depends on these values.
-        row = _latest_document_row(document_id)
-        if not row or row["deleted_at"] is not None:
-            logger.warning("summary_job missing document_id=%s", document_id)
-            return {"ok": False, "error": "missing document"}
-        if row["status"] == "SUMMARIZED":
-            _update_job_status(document_id, "summary", "COMPLETED", result={"ok": True, "skipped": True})
-            logger.info("summary_job skipped document_id=%s", document_id)
-            return {"ok": True, "document_id": document_id, "skipped": True}
-
-        # Summary helper returns mode-aware payload skeleton.
-        summary = build_summary_payload(mode=row["mode"], safe_mode=bool(row["safe_mode"]))
-        markdown = (
-            f"## Summary\n\nSafe mode: `{summary['safeMode']}`.\n\n"
-            f"- Document mode: `{summary['mode']}`\n"
-            f"- Findings are placeholder data pending Bedrock integration."
-            if include_markdown
-            else ""
-        )
-
-        with engine.begin() as conn:
-            # Store both machine JSON and optional markdown representation.
-            conn.execute(
-                text(
-                    """
-                    UPDATE summaries
-                    SET status=CAST('SUMMARIZED' AS VARCHAR),
-                        json_payload=CAST(:json_payload AS JSONB),
-                        markdown=CAST(:markdown AS TEXT),
-                        token_usage=CAST(:token_usage AS JSONB)
-                    WHERE id=(
-                      SELECT id FROM summaries
-                      WHERE document_id=CAST(:document_id AS UUID)
-                      ORDER BY created_at DESC
-                      LIMIT 1
-                    )
-                    """
-                ),
-                {
-                    "document_id": document_id,
-                    "json_payload": json.dumps(summary["json"]),
-                    "markdown": markdown,
-                    "token_usage": json.dumps({"inputTokens": 0, "outputTokens": 0, "model": "placeholder"}),
-                },
+        with stage_timer("summary"):
+            result = run_summary(document_id, summary_id, include_markdown=include_markdown)
+        _update_job_status(document_id, "summary", "COMPLETED", result=result)
+        logger.info("summary_job completed document_id=%s summary_id=%s", document_id, summary_id)
+        return {"ok": True, "document_id": document_id, "summary_id": summary_id, "finished_at": _now_iso()}
+    except SummaryError as exc:
+        if exc.retryable and self.request.retries < self.max_retries:
+            logger.warning(
+                "summary_job retry document_id=%s code=%s attempt=%s", document_id, exc.code, self.request.retries + 1
             )
-        # Mark parent document summarized once latest summary row is updated.
-        _update_document_status(document_id, "SUMMARIZED")
-        _update_job_status(document_id, "summary", "COMPLETED", result={"ok": True})
-        logger.info("summary_job completed document_id=%s", document_id)
-        return {"ok": True, "document_id": document_id, "summary_id": str(UUID(summary["summaryId"]))}
+            raise self.retry(exc=exc, countdown=_retry_countdown(self.request.retries))
+        return _fail_summary(document_id, summary_id, exc.code, exc.message, job_error=f"{exc.code}: {exc.message}")
     except Exception as exc:  # noqa: BLE001
         if self.request.retries < self.max_retries:
-            countdown = min(60, 5 * (2 ** self.request.retries))
             logger.warning(
                 "summary_job retry document_id=%s attempt=%s error=%s",
                 document_id,
                 self.request.retries + 1,
                 exc.__class__.__name__,
             )
-            raise self.retry(exc=exc, countdown=countdown)
-        _update_document_status(document_id, "FAILED")
-        _update_job_status(document_id, "summary", "FAILED", error="summary_job failed")
-        logger.exception("summary_job failed document_id=%s", document_id)
-        return {"ok": False, "document_id": document_id, "error": "summary_job failed"}
+            raise self.retry(exc=exc, countdown=_retry_countdown(self.request.retries))
+        return _fail_summary(
+            document_id,
+            summary_id,
+            "SUMMARY_FAILED",
+            "The summary could not be built. You can try again.",
+            job_error=_safe_error_text(exc),
+        )
+
+
+@celery.task(name="purge_user_data")
+def purge_user_data(user_id: str) -> dict:
+    """Hard-delete one user's files and rows. Queued by DELETE account."""
+    from services.worker.app.retention import purge_user
+
+    return purge_user(user_id)
+
+
+@celery.task(name="apply_retention")
+def apply_retention() -> dict:
+    """Drop documents older than the owner's retention setting."""
+    from services.worker.app.retention import apply_retention as _apply
+
+    return _apply()
+
+
+@celery.task(name="publish_queue_depth")
+def publish_queue_depth() -> dict:
+    """Queue length for worker autoscaling. No-op unless a CloudWatch namespace is set."""
+    from services.worker.app.metrics import publish_queue_depth as _publish
+
+    return _publish()
 
 
 @celery.task(name="cleanup_stale_uploads")
