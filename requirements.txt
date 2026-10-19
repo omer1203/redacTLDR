@@ -11,7 +11,8 @@ sqlalchemy
 alembic
 psycopg[binary]
 pikepdf
-pymupdf
+# 1.28 and 2.0 omit the first removed glyph's width, so the next word slides into the box.
+pymupdf==1.27.2.3
 langchain
 langchain-aws
 opentelemetry-api

@@ -3,7 +3,8 @@ redis
 sqlalchemy
 psycopg[binary]
 boto3
-pymupdf
+# 1.28 and 2.0 omit the first removed glyph's width, so the next word slides into the box.
+pymupdf==1.27.2.3
 pikepdf
 # R6 summaries import pydantic at worker startup, and call LangChain only when a summary runs.
 pydantic

@@ -41,7 +41,7 @@ There are five modes (resume, employment paperwork, medical paperwork, legal con
 | Auth | Clerk; the API verifies RS256 JWTs against Clerk's JWKS with audience and issuer checks |
 | API | FastAPI, SQLAlchemy 2, Alembic, Pydantic, PostgreSQL |
 | Background jobs | Celery workers and beat on Redis |
-| Document AI | AWS Textract (OCR), Amazon Comprehend plus custom regex rules (PII), PyMuPDF (redaction), LangChain with Amazon Bedrock (summaries) |
+| Document AI | AWS Textract (OCR), Amazon Comprehend plus custom regex rules (PII), PyMuPDF 1.27 (redaction), LangChain with Amazon Bedrock (summaries) |
 | Storage | S3 via short-lived presigned URLs; the browser uploads and downloads directly |
 | Infrastructure | Terraform modules for VPC, ALB, ECS Fargate, ElastiCache, KMS-encrypted S3, Secrets Manager, IAM with GitHub OIDC, CloudWatch alarms |
 | Observability | OpenTelemetry traces carried from the API request into the worker, exported to X-Ray; JSON logs with trace and document IDs |
